@@ -55,3 +55,4 @@ class Authenticator:
         ).click()
         self.driver.implicitly_wait(0)
         logger.success("Authorized to https://eq.hsc.gov.ua/ successfully!")
+        self.notifier.notify_wait_auth(authentication_link)
