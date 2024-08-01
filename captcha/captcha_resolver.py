@@ -26,15 +26,17 @@ class CaptchaResolver:
 
     def resolve_captcha(self):
         try:
-            self.driver_wait.until(EC.visibility_of(self.driver.find_element(By.XPATH, '//iframe[@title="reCAPTCHA"]')))
-            recaptcha_control_frame = self.driver.find_element(By.XPATH, '//iframe[@title="reCAPTCHA"]')
-
             for i in range(CAPTCHA_SOLVE_RETRY_THRESHOLD):
+                self.driver_wait.until(
+                    EC.visibility_of(self.driver.find_element(By.XPATH, '//iframe[@title="reCAPTCHA"]'))
+                )
+                recaptcha_control_frame = self.driver.find_element(By.XPATH, '//iframe[@title="reCAPTCHA"]')
+
                 try:
                     self.solver.click_recaptcha_v2(recaptcha_control_frame)
                     break
                 except:
-                    logger.warning("Failed to resolve captcha... Trying again...")
+                    logger.warning(f"[Attempt #{i}] Failed to resolve captcha... Trying again...")
                     self.driver.refresh()
                     continue
 
@@ -42,6 +44,7 @@ class CaptchaResolver:
                 EC.element_to_be_clickable(self.driver.find_element(By.CSS_SELECTOR, "button[type='submit']"))
             ).click()
 
+            self.driver_wait.until(EC.url_to_be('https://eq.hsc.gov.ua/step0'))
             logger.success('Captcha resolved successfully!')
         except Exception as e:
             logger.error(e)
