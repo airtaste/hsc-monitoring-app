@@ -3,23 +3,23 @@ import random
 from datetime import datetime, timedelta
 from time import sleep
 
+from loguru import logger
+from selenium.webdriver import Chrome
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
-
-from selenium.webdriver import Chrome
 
 from config.configuration import DELAYS_BETWEEN_DAY_MONITORING_SECONDS, MONITORING_DATE_RANGE_DAYS, \
     MONITORING_DATE_RANGE_START_FROM_DELTA
 from model.models import Slot
 from notification.notifier import Notifier
-from loguru import logger
 
 
 class SlotReserver:
     def __init__(self, driver: Chrome, notifier: Notifier, office_id: int):
         start_from = datetime.today() + timedelta(days=MONITORING_DATE_RANGE_START_FROM_DELTA)
-        self.date_range = [(start_from + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(MONITORING_DATE_RANGE_DAYS)]
+        self.date_range = [(start_from + timedelta(days=i)).strftime('%Y-%m-%d') for i in
+                           range(MONITORING_DATE_RANGE_DAYS)]
         logger.info(f"Configured slot reserver with date range from {self.date_range[0]} to {self.date_range[-1]}")
         self.notifier = notifier
         self.driver = driver
@@ -30,7 +30,6 @@ class SlotReserver:
         free_slots = []
 
         for date in self.date_range:
-
             get_slots_script = f"""
                 var xhr = new XMLHttpRequest();
                 xhr.open('POST', 'https://eq.hsc.gov.ua/site/freetimes', false);
@@ -85,6 +84,7 @@ class SlotReserver:
         self.driver_wait.until(
             EC.element_to_be_clickable(self.driver.find_element(by=By.XPATH, value="input[@value='Далі']"))).click()
         self.driver_wait.until(
-            EC.element_to_be_clickable(self.driver.find_element(by=By.XPATH, value="a[text()='Підтвердити запис']"))).click()
+            EC.element_to_be_clickable(
+                self.driver.find_element(by=By.XPATH, value="a[text()='Підтвердити запис']"))).click()
 
         self.notifier.notify_slot_reserved(slot)

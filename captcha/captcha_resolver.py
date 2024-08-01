@@ -1,9 +1,9 @@
+from loguru import logger
 from selenium.common import NoSuchElementException
+from selenium.webdriver import Chrome
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
-from selenium.webdriver import Chrome
-from loguru import logger
 from selenium_recaptcha_solver import RecaptchaSolver
 
 from config.configuration import CAPTCHA_SOLVE_RETRY_THRESHOLD

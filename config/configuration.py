@@ -18,3 +18,5 @@ CAPTCHA_SOLVE_RETRY_THRESHOLD = 10
 MONITORING_DATE_RANGE_START_FROM_DELTA = 4
 # Days to define date range for monitoring slots on exam
 MONITORING_DATE_RANGE_DAYS = 16
+# Flag to define if GUI for browser should be disabled (false by default)
+HEADLESS_MODE = False

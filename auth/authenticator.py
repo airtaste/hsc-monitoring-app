@@ -1,9 +1,9 @@
+from loguru import logger
 from selenium.common import TimeoutException, NoSuchElementException
 from selenium.webdriver import Chrome
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
-from loguru import logger
 
 from config.configuration import AUTH_TIMER_THRESHOLD_SECONDS
 from notification.notifier import Notifier
