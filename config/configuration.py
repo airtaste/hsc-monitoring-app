@@ -19,4 +19,10 @@ MONITORING_DATE_RANGE_START_FROM_DELTA = 4
 # Days to define date range for monitoring slots on exam
 MONITORING_DATE_RANGE_DAYS = 16
 # Flag to define if GUI for browser should be disabled (false by default)
-HEADLESS_MODE = False
+HEADLESS_MODE = True
+# HSC office location that would be used during slot reservation (in action with map)
+HSC_OFFICE_LOCATION = {
+    "latitude": 49.829620,
+    "longitude": 23.941710,
+    "accuracy": 200
+}

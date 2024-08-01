@@ -10,7 +10,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 from auth.authenticator import Authenticator
 from captcha.captcha_resolver import CaptchaResolver
 from config.configuration import TELEGRAM_BOT_TOKEN_ID, CHAT_ID, HSC_OFFICE_ID_LVIV, \
-    REAUTH_TIME_WINDOW_SECONDS, DELAYS_BETWEEN_SEARCH_ATTEMPT_SECONDS, HEADLESS_MODE
+    REAUTH_TIME_WINDOW_SECONDS, DELAYS_BETWEEN_SEARCH_ATTEMPT_SECONDS, HEADLESS_MODE, HSC_OFFICE_LOCATION
 from monitoring.slot_reserver import SlotReserver
 from notification.notifier import Notifier
 from utils.captcha_utils import perform_with_captcha_guard
@@ -29,21 +29,8 @@ if __name__ == '__main__':
     chrome_service = Service(executable_path=ChromeDriverManager().install())
     driver = webdriver.Chrome(service=chrome_service, options=options)
 
-    driver.execute_cdp_cmd(
-        "Emulation.setGeolocationOverride",
-        {
-            "latitude": 49.829620,
-            "longitude": 23.941710,
-            "accuracy": 200
-        },
-    )
-    driver.execute_cdp_cmd(
-        "Browser.grantPermissions",
-        {
-            "origin": "https://eq.hsc.gov.ua/",
-            "permissions": ["geolocation"],
-        },
-    )
+    driver.execute_cdp_cmd("Emulation.setGeolocationOverride", HSC_OFFICE_LOCATION)
+    driver.execute_cdp_cmd("Browser.grantPermissions", {"origin": "https://eq.hsc.gov.ua/", "permissions": ["geolocation"]})
 
     notifier = Notifier(token_id=TELEGRAM_BOT_TOKEN_ID, chat_id=CHAT_ID)
     captcha_resolver = CaptchaResolver(driver=driver)
