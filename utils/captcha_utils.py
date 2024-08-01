@@ -1,5 +1,3 @@
-from time import sleep
-
 from selenium.common import NoSuchElementException
 
 from captcha.captcha_resolver import CaptchaResolver
@@ -15,7 +13,6 @@ def perform_with_captcha_guard(captcha_resolver: CaptchaResolver, retry_count: i
 
     if captcha_resolver.has_captcha():
         captcha_resolver.resolve_captcha()
-        sleep(10)
 
     try:
         func(**kwargs)

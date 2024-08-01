@@ -39,6 +39,6 @@ class CaptchaResolver:
                 EC.element_to_be_clickable(self.driver.find_element(By.CSS_SELECTOR, "button[type='submit']"))
             ).click()
 
-            logger.info('Captcha resolved successfully!')
+            logger.success('Captcha resolved successfully!')
         except Exception as e:
             logger.error(e)

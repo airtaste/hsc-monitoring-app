@@ -2,7 +2,6 @@ import time
 
 from loguru import logger
 import random
-from datetime import datetime
 from time import sleep
 
 from selenium.webdriver import Keys, ActionChains
@@ -18,15 +17,14 @@ from utils.captcha_utils import perform_with_captcha_guard
 TELEGRAM_BOT_TOKEN_ID = ''
 CHAT_ID = ''
 HSC_OFFICE_ID_LVIV = 61
-DELAYS = (60, 240)
+DELAY_RANGE_SECONDS = (240, 600)
 REAUTH_TIME_WINDOW_SECONDS = 14400
 
 if __name__ == '__main__':
-    date = datetime.strptime(input("Enter a date (YYYY-MM-DD): "), '%Y-%m-%d')
-
     options = webdriver.ChromeOptions()
     options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36")
     options.add_argument("--start-maximized")
+    # options.add_argument('--headless')
     options.add_argument("--disable-blink-features=AutomationControlled")
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option('useAutomationExtension', False)
@@ -51,7 +49,7 @@ if __name__ == '__main__':
     notifier = Notifier(token_id=TELEGRAM_BOT_TOKEN_ID, chat_id=CHAT_ID)
     captcha_resolver = CaptchaResolver(driver=driver)
     authenticator = Authenticator(driver=driver, notifier=notifier)
-    slot_reserver = SlotReserver(driver=driver, notifier=notifier, monitoring_date=date, office_id=HSC_OFFICE_ID_LVIV)
+    slot_reserver = SlotReserver(driver=driver, notifier=notifier, office_id=HSC_OFFICE_ID_LVIV)
 
     has_reserved_slots = False
 
@@ -78,15 +76,15 @@ if __name__ == '__main__':
                 free_slots = perform_with_captcha_guard(captcha_resolver, 0, slot_reserver.get_free_slots)
 
                 if free_slots:
-                    logger.info("Found free slots! Reserving...")
+                    logger.success("Found free slots! Reserving...")
                     slot = random.choice(free_slots)
                     perform_with_captcha_guard(captcha_resolver, 0, slot_reserver.reserve_slot_and_notify, slot)
 
                     has_reserved_slots = True
                     break
 
-                sleep_time = random.uniform(*DELAYS)
-                logger.info(f"Nothing was found during attempt. Sleep for {sleep_time:.1f} seconds until next try...")
+                sleep_time = random.uniform(*DELAY_RANGE_SECONDS)
+                logger.info(f"Nothing was found during search attempt. Sleep for {sleep_time:.1f} seconds until next try...")
                 sleep(sleep_time)
     finally:
         # Cleanup browser cache

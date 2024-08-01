@@ -3,6 +3,7 @@ from selenium.webdriver import Chrome
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
+from loguru import logger
 
 from notification.notifier import Notifier
 
@@ -49,9 +50,11 @@ class Authenticator:
             EC.visibility_of(self.driver.find_element(by=By.ID, value="qrcode"))).get_attribute("title")
         # Send authorization link via telegram bot
         self.notifier.notify_wait_auth(authentication_link)
+        logger.info("Sent authentication link via telegram bot! Waiting for approval...")
         # Wait until button would be ready
         self.driver.implicitly_wait(AUTH_TIMER_THRESHOLD_SECONDS)
         self.driver_wait.until(
             EC.element_to_be_clickable(self.driver.find_element(by=By.ID, value="btnAcceptUserDataAgreement"))
         ).click()
         self.driver.implicitly_wait(0)
+        logger.success("Authorized to https://eq.hsc.gov.ua/ successfully!")
