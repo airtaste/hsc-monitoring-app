@@ -4,6 +4,7 @@ from time import sleep
 
 from loguru import logger
 from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 
 from auth.authenticator import Authenticator
@@ -25,7 +26,8 @@ if __name__ == '__main__':
     options.add_argument("--disable-blink-features=AutomationControlled")
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option('useAutomationExtension', False)
-    driver = webdriver.Chrome(executable_path=ChromeDriverManager().install(), chrome_options=options)
+    chrome_service = Service(executable_path=ChromeDriverManager().install())
+    driver = webdriver.Chrome(service=chrome_service, options=options)
 
     driver.execute_cdp_cmd(
         "Emulation.setGeolocationOverride",
