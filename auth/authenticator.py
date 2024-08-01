@@ -5,9 +5,8 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 from loguru import logger
 
+from config.configuration import AUTH_TIMER_THRESHOLD_SECONDS
 from notification.notifier import Notifier
-
-AUTH_TIMER_THRESHOLD_SECONDS = 300
 
 
 class Authenticator:
@@ -27,9 +26,7 @@ class Authenticator:
             try:
                 self.__authenticate_and_notify()
                 authenticated = True
-            except NoSuchElementException:
-                continue
-            except TimeoutException:
+            except (NoSuchElementException, TimeoutException):
                 continue
 
     def __authenticate_and_notify(self):

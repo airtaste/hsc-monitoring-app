@@ -1,12 +1,11 @@
 from selenium.common import NoSuchElementException
 
 from captcha.captcha_resolver import CaptchaResolver
-
-MAX_RETRIES = 5
+from config.configuration import CAPTCHA_GUARD_MAX_RETRIES
 
 
 def perform_with_captcha_guard(captcha_resolver: CaptchaResolver, retry_count: int, func: callable, **kwargs):
-    if retry_count > MAX_RETRIES:
+    if retry_count > CAPTCHA_GUARD_MAX_RETRIES:
         raise Exception(
             "Error during function execution. Seems like element cannot be found event after captcha solving."
         )

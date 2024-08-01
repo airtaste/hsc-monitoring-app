@@ -9,11 +9,10 @@ from selenium.webdriver.support.wait import WebDriverWait
 
 from selenium.webdriver import Chrome
 
+from config.configuration import DELAYS_BETWEEN_DAY_MONITORING_SECONDS
 from model.models import Slot
 from notification.notifier import Notifier
 from loguru import logger
-
-DELAYS_BETWEEN_DAY_MONITORING_SECONDS = (5, 10)
 
 
 class SlotReserver:

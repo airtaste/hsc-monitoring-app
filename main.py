@@ -10,15 +10,11 @@ from webdriver_manager.chrome import ChromeDriverManager
 
 from auth.authenticator import Authenticator
 from captcha.captcha_resolver import CaptchaResolver
+from config.configuration import TELEGRAM_BOT_TOKEN_ID, CHAT_ID, HSC_OFFICE_ID_LVIV, \
+    REAUTH_TIME_WINDOW_SECONDS, DELAYS_BETWEEN_SEARCH_ATTEMPT_SECONDS
 from notification.notifier import Notifier
 from monitoring.slot_reserver import SlotReserver
 from utils.captcha_utils import perform_with_captcha_guard
-
-TELEGRAM_BOT_TOKEN_ID = ''
-CHAT_ID = ''
-HSC_OFFICE_ID_LVIV = 61
-DELAY_RANGE_SECONDS = (240, 600)
-REAUTH_TIME_WINDOW_SECONDS = 14400
 
 if __name__ == '__main__':
     options = webdriver.ChromeOptions()
@@ -83,7 +79,7 @@ if __name__ == '__main__':
                     has_reserved_slots = True
                     break
 
-                sleep_time = random.uniform(*DELAY_RANGE_SECONDS)
+                sleep_time = random.uniform(*DELAYS_BETWEEN_SEARCH_ATTEMPT_SECONDS)
                 logger.info(f"Nothing was found during search attempt. Sleep for {sleep_time:.1f} seconds until next try...")
                 sleep(sleep_time)
     finally:

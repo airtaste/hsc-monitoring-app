@@ -6,6 +6,8 @@ from selenium.webdriver import Chrome
 from loguru import logger
 from selenium_recaptcha_solver import RecaptchaSolver
 
+from config.configuration import CAPTCHA_SOLVE_RETRY_THRESHOLD
+
 
 class CaptchaResolver:
     def __init__(self, driver: Chrome):
@@ -27,13 +29,14 @@ class CaptchaResolver:
             self.driver_wait.until(EC.visibility_of(self.driver.find_element(By.XPATH, '//iframe[@title="reCAPTCHA"]')))
             recaptcha_control_frame = self.driver.find_element(By.XPATH, '//iframe[@title="reCAPTCHA"]')
 
-            for i in range(10):
+            for i in range(CAPTCHA_SOLVE_RETRY_THRESHOLD):
                 try:
                     self.solver.click_recaptcha_v2(recaptcha_control_frame)
                     break
                 except:
                     logger.warning("Failed to resolve captcha... Trying again...")
-                    pass
+                    self.driver.refresh()
+                    continue
 
             self.driver_wait.until(
                 EC.element_to_be_clickable(self.driver.find_element(By.CSS_SELECTOR, "button[type='submit']"))
