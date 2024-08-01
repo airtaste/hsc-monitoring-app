@@ -9,21 +9,17 @@ from selenium.webdriver.support.wait import WebDriverWait
 
 from selenium.webdriver import Chrome
 
-from config.configuration import DELAYS_BETWEEN_DAY_MONITORING_SECONDS
+from config.configuration import DELAYS_BETWEEN_DAY_MONITORING_SECONDS, MONITORING_DATE_RANGE_DAYS, \
+    MONITORING_DATE_RANGE_START_FROM_DELTA
 from model.models import Slot
 from notification.notifier import Notifier
 from loguru import logger
 
 
 class SlotReserver:
-    def __init__(
-            self,
-            driver: Chrome,
-            notifier: Notifier,
-            office_id: int
-    ):
-        # Search for two weeks ahead
-        self.date_range = [(datetime.today() + timedelta(days=4) + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(11)]
+    def __init__(self, driver: Chrome, notifier: Notifier, office_id: int):
+        start_from = datetime.today() + timedelta(days=MONITORING_DATE_RANGE_START_FROM_DELTA)
+        self.date_range = [(start_from + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(MONITORING_DATE_RANGE_DAYS)]
         logger.info(f"Configured slot reserver with date range from {self.date_range[0]} to {self.date_range[-1]}")
         self.notifier = notifier
         self.driver = driver

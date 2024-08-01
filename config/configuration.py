@@ -14,3 +14,7 @@ AUTH_TIMER_THRESHOLD_SECONDS = 600
 REAUTH_TIME_WINDOW_SECONDS = 14400
 CAPTCHA_GUARD_MAX_RETRIES = 5
 CAPTCHA_SOLVE_RETRY_THRESHOLD = 10
+# Days delta to start searching from starting from today (e.g. 4 would mean that you will start searching from 'today + 4 days')
+MONITORING_DATE_RANGE_START_FROM_DELTA = 4
+# Days to define date range for monitoring slots on exam
+MONITORING_DATE_RANGE_DAYS = 16
