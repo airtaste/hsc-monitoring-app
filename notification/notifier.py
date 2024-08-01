@@ -31,7 +31,6 @@ class Notifier:
 
         requests.post("https://api.telegram.org/bot{token}/sendMessage".format(token=self.token_id), data=payload)
 
-
     def notify_auth_success(self):
         msg = f"""
             <b>Update:</b> Authorized to https://eq.hsc.gov.ua/ successfully!
