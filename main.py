@@ -10,7 +10,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 from auth.authenticator import Authenticator
 from captcha.captcha_resolver import CaptchaResolver
 from config.configuration import TELEGRAM_BOT_TOKEN_ID, CHAT_ID, HSC_OFFICE_ID_LVIV, \
-    REAUTH_TIME_WINDOW_SECONDS, DELAYS_BETWEEN_SEARCH_ATTEMPT_SECONDS, HEADLESS_MODE, HSC_OFFICE_LOCATION
+    REAUTH_THRESHOLD_HOURS, DELAYS_BETWEEN_SEARCH_ATTEMPT_SECONDS, HEADLESS_MODE, HSC_OFFICE_LOCATION
 from monitoring.slot_reserver import SlotReserver
 from notification.notifier import Notifier
 from utils.captcha_utils import perform_with_captcha_guard
@@ -54,7 +54,7 @@ if __name__ == '__main__':
                 auth_current = time.time()
                 driver.refresh()
 
-                if (auth_current - auth_start) > REAUTH_TIME_WINDOW_SECONDS:
+                if (auth_current - auth_start) / 3600 > REAUTH_THRESHOLD_HOURS:
                     logger.info("Seems like authentication session time exceeded. Need to perform re-authentication.")
                     driver.delete_all_cookies()
                     break

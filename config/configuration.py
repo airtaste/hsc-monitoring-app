@@ -10,8 +10,8 @@ DELAYS_BETWEEN_SEARCH_ATTEMPT_SECONDS = (240, 600)
 DELAYS_BETWEEN_DAY_MONITORING_SECONDS = (5, 10)
 # Time for authentication process, after exceeding this you would probably need to perform re-auth
 AUTH_TIMER_THRESHOLD_SECONDS = 600
-# Automatic re-auth time in seconds, after exceeding this you would logout from system
-REAUTH_TIME_WINDOW_SECONDS = 14400
+# Automatic re-auth time in hours, after exceeding this you would logout from system
+REAUTH_THRESHOLD_HOURS = 8
 CAPTCHA_GUARD_MAX_RETRIES = 5
 CAPTCHA_SOLVE_RETRY_THRESHOLD = 10
 # Days delta to start searching from starting from today (e.g. 4 would mean that you will start searching from 'today + 4 days')
