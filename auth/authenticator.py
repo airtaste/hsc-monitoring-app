@@ -1,8 +1,6 @@
-import time
 from pathlib import Path
 
 from loguru import logger
-from pynput.keyboard import Controller, Key
 from selenium.webdriver import Chrome
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
@@ -68,20 +66,15 @@ class Authenticator:
             self.driver.find_element(by=By.CSS_SELECTOR, value="a[href='/euid-auth-js']"))).click()
 
         # Upload key file
-        keyboard = Controller()
         key_file_path = Path(EUID_KEY_PATH).absolute().__str__()
+        # Somehow this action trick id-gov system, and it thinks that something was uploaded in natural way
         self.driver_wait.until(
             EC.visibility_of(
                 self.driver.find_element(by=By.XPATH, value="//span[text()='оберіть його на своєму носієві']")
             )
         ).click()
-
-        time.sleep(3)
-
-        keyboard.type(key_file_path)
-        keyboard.press(Key.enter)
-
-        time.sleep(3)
+        key_input = self.driver.find_element(by=By.ID, value="PKeyFileInput")
+        key_input.send_keys(key_file_path)
 
         # Input password for key
         pwd_input = self.driver.find_element(by=By.ID, value="PKeyPassword")
