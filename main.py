@@ -47,8 +47,11 @@ if __name__ == '__main__':
 
             auth_start = time.time()
 
-            driver.get("https://eq.hsc.gov.ua/")
-            perform_with_captcha_guard(captcha_resolver, 0, authenticator.try_authenticate)
+            perform_with_captcha_guard(
+                captcha_resolver=captcha_resolver,
+                retry_count=0,
+                func=authenticator.try_authenticate
+            )
 
             while True:
                 auth_current = time.time()
@@ -59,12 +62,26 @@ if __name__ == '__main__':
                     driver.delete_all_cookies()
                     break
 
-                free_slots = perform_with_captcha_guard(captcha_resolver, 0, slot_reserver.get_free_slots)
+                free_slots = perform_with_captcha_guard(
+                    captcha_resolver=captcha_resolver,
+                    retry_count=0,
+                    func=slot_reserver.get_free_slots
+                )
 
                 if free_slots:
-                    logger.success("Found free slots! Reserving...")
-                    slot = random.choice(free_slots)
-                    perform_with_captcha_guard(captcha_resolver, 0, slot_reserver.reserve_slot_and_notify, slot)
+                    reservation = perform_with_captcha_guard(
+                        captcha_resolver=captcha_resolver,
+                        retry_count=0,
+                        func=slot_reserver.create_slot_reservation,
+                        slots=free_slots
+                    )
+
+                    perform_with_captcha_guard(
+                        captcha_resolver=captcha_resolver,
+                        retry_count=0,
+                        func=slot_reserver.approve_reservation,
+                        reservation=reservation
+                    )
 
                     has_reserved_slots = True
                     break

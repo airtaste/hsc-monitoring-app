@@ -15,11 +15,15 @@ REAUTH_THRESHOLD_HOURS = 8
 CAPTCHA_GUARD_MAX_RETRIES = 5
 CAPTCHA_SOLVE_RETRY_THRESHOLD = 10
 # Days delta to start searching from starting from today (e.g. 4 would mean that you will start searching from 'today + 4 days')
-MONITORING_DATE_RANGE_START_FROM_DELTA = 4
+MONITORING_DATE_RANGE_START_FROM_DELTA = 3
 # Days to define date range for monitoring slots on exam
-MONITORING_DATE_RANGE_DAYS = 16
+MONITORING_DATE_RANGE_DAYS = 18
 # Flag to define if GUI for browser should be disabled (false by default)
-HEADLESS_MODE = True
+HEADLESS_MODE = False
+# Mode of authentication. Possible values is: BANK_ID, EUID.
+AUTHENTICATOR_MODE = 'EUID'
+EUID_KEY_PATH = "euid/Key-6"
+EUID_KEY_PASSWORD = ''
 # HSC office location that would be used during slot reservation (in action with map)
 HSC_OFFICE_LOCATION = {
     "latitude": 49.829620,

@@ -1,11 +1,14 @@
+import time
+from pathlib import Path
+
 from loguru import logger
-from selenium.common import TimeoutException, NoSuchElementException
+from pynput.keyboard import Controller, Key
 from selenium.webdriver import Chrome
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 
-from config.configuration import AUTH_TIMER_THRESHOLD_SECONDS
+from config.configuration import AUTH_TIMER_THRESHOLD_SECONDS, AUTHENTICATOR_MODE, EUID_KEY_PASSWORD, EUID_KEY_PATH
 from notification.notifier import Notifier
 
 
@@ -13,23 +16,17 @@ class Authenticator:
 
     def __init__(self, driver: Chrome, notifier: Notifier):
         self.driver = driver
-        self.driver_wait = WebDriverWait(driver=self.driver, timeout=15)
+        self.driver_wait = WebDriverWait(driver=self.driver, timeout=30)
         self.notifier = notifier
 
     def try_authenticate(self):
-        authenticated = False
+        self.driver.get("https://eq.hsc.gov.ua/")
+        if AUTHENTICATOR_MODE == 'BANK_ID':
+            self.bank_id_authenticate()
+        else:
+            self.euid_authenticate()
 
-        while True:
-            if authenticated:
-                break
-
-            try:
-                self.__authenticate_and_notify()
-                authenticated = True
-            except (NoSuchElementException, TimeoutException):
-                continue
-
-    def __authenticate_and_notify(self):
+    def bank_id_authenticate(self):
         # Authorize via bank id
         self.driver_wait.until(
             EC.element_to_be_clickable(
@@ -54,5 +51,54 @@ class Authenticator:
             EC.element_to_be_clickable(self.driver.find_element(by=By.ID, value="btnAcceptUserDataAgreement"))
         ).click()
         self.driver.implicitly_wait(0)
+        logger.success("Authorized to https://eq.hsc.gov.ua/ successfully!")
+        self.notifier.notify_auth_success()
+
+    def euid_authenticate(self):
+        # Authorize via euid key
+        self.driver_wait.until(
+            EC.element_to_be_clickable(
+                self.driver.find_element(by=By.CSS_SELECTOR, value="input[type=checkbox]")
+            )
+        ).click()
+        self.driver_wait.until(
+            EC.element_to_be_clickable(self.driver.find_element(by=By.CLASS_NAME, value="btn-hsc-green_s"))).click()
+
+        self.driver_wait.until(EC.element_to_be_clickable(
+            self.driver.find_element(by=By.CSS_SELECTOR, value="a[href='/euid-auth-js']"))).click()
+
+        # Upload key file
+        keyboard = Controller()
+        key_file_path = Path(EUID_KEY_PATH).absolute().__str__()
+        self.driver_wait.until(
+            EC.visibility_of(
+                self.driver.find_element(by=By.XPATH, value="//span[text()='оберіть його на своєму носієві']")
+            )
+        ).click()
+
+        time.sleep(3)
+
+        keyboard.type(key_file_path)
+        keyboard.press(Key.enter)
+
+        time.sleep(3)
+
+        # Input password for key
+        pwd_input = self.driver.find_element(by=By.ID, value="PKeyPassword")
+        pwd_input.send_keys(EUID_KEY_PASSWORD)
+
+        self.driver_wait.until(
+            EC.element_to_be_clickable(
+                self.driver.find_element(by=By.ID, value="id-app-login-sign-form-file-key-sign-button")
+            )
+        ).click()
+
+        # Wait until button would be ready
+        self.driver.implicitly_wait(AUTH_TIMER_THRESHOLD_SECONDS)
+        self.driver_wait.until(
+            EC.element_to_be_clickable(self.driver.find_element(by=By.ID, value="btnAcceptUserDataAgreement"))
+        ).click()
+        self.driver.implicitly_wait(0)
+
         logger.success("Authorized to https://eq.hsc.gov.ua/ successfully!")
         self.notifier.notify_auth_success()

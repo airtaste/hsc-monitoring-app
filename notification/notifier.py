@@ -56,10 +56,23 @@ class Notifier:
 
         requests.post("https://api.telegram.org/bot{token}/sendMessage".format(token=self.token_id), data=payload)
 
+    def notify_free_slots_found(self):
+        msg = f"""
+            <b>Update:</b> Free slots found! Reservation is on the way...</b>.
+            Once slot would be reserved you would retrieve notification about reservation!
+        """
+        payload = {
+            'chat_id': self.chat_id,
+            'text': msg,
+            'parse_mode': 'html'
+        }
+
+        requests.post("https://api.telegram.org/bot{token}/sendMessage".format(token=self.token_id), data=payload)
+
     def notify_slot_reserved(self, slot: Slot):
         msg = f"""
             <b>Update:</b> A slot has been reserved for you on <b>{slot.ch_date} {slot.ch_time}</b>.
-            Please confirm your reservation within the next 1 minute to secure it. Time is running out, so please act quickly!
+             Good luck!
         """
         payload = {
             'chat_id': self.chat_id,
