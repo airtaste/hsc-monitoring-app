@@ -13,7 +13,6 @@ from config.configuration import TELEGRAM_BOT_TOKEN_ID, CHAT_ID, HSC_OFFICE_ID_L
     REAUTH_THRESHOLD_HOURS, DELAYS_BETWEEN_SEARCH_ATTEMPT_SECONDS, HEADLESS_MODE, HSC_OFFICE_LOCATION
 from monitoring.slot_reserver import SlotReserver
 from notification.notifier import Notifier
-from utils.captcha_utils import perform_with_captcha_guard
 from utils.driver_utils import cleanup_browser_cache
 
 if __name__ == '__main__':
@@ -34,8 +33,8 @@ if __name__ == '__main__':
 
     notifier = Notifier(token_id=TELEGRAM_BOT_TOKEN_ID, chat_id=CHAT_ID)
     captcha_resolver = CaptchaResolver(driver=driver)
-    authenticator = Authenticator(driver=driver, notifier=notifier)
-    slot_reserver = SlotReserver(driver=driver, notifier=notifier, office_id=HSC_OFFICE_ID_LVIV)
+    authenticator = Authenticator(driver=driver, notifier=notifier, captcha_resolver=captcha_resolver)
+    slot_reserver = SlotReserver(driver=driver, notifier=notifier, captcha_resolver=captcha_resolver, office_id=HSC_OFFICE_ID_LVIV)
 
     has_reserved_slots = False
 
@@ -47,42 +46,24 @@ if __name__ == '__main__':
 
             auth_start = time.time()
 
-            perform_with_captcha_guard(
-                captcha_resolver=captcha_resolver,
-                retry_count=0,
-                func=authenticator.try_authenticate
-            )
+            authenticated = authenticator.try_authenticate()
+
+            if not authenticated:
+                raise Exception("Cannot authenticate to site. Stopping application gracefully...")
 
             while True:
                 auth_current = time.time()
-                driver.refresh()
 
                 if (auth_current - auth_start) / 3600 > REAUTH_THRESHOLD_HOURS:
                     logger.info("Seems like authentication session time exceeded. Need to perform re-authentication.")
                     driver.delete_all_cookies()
                     break
 
-                free_slots = perform_with_captcha_guard(
-                    captcha_resolver=captcha_resolver,
-                    retry_count=0,
-                    func=slot_reserver.get_free_slots
-                )
+                free_slots = slot_reserver.get_free_slots()
 
                 if free_slots:
-                    reservation = perform_with_captcha_guard(
-                        captcha_resolver=captcha_resolver,
-                        retry_count=0,
-                        func=slot_reserver.create_slot_reservation,
-                        slots=free_slots
-                    )
-
-                    perform_with_captcha_guard(
-                        captcha_resolver=captcha_resolver,
-                        retry_count=0,
-                        func=slot_reserver.approve_reservation,
-                        reservation=reservation
-                    )
-
+                    reservation = slot_reserver.create_slot_reservation(free_slots)
+                    slot_reserver.approve_reservation(reservation)
                     has_reserved_slots = True
                     break
 
@@ -90,6 +71,8 @@ if __name__ == '__main__':
                 logger.info(
                     f"Nothing was found during search attempt. Sleep for {sleep_time:.1f} seconds until next try...")
                 sleep(sleep_time)
+    except Exception as e:
+        logger.error(e)
     finally:
         cleanup_browser_cache(driver)
         driver.quit()

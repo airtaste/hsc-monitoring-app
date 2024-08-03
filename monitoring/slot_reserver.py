@@ -9,6 +9,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 
+from captcha.captcha_resolver import CaptchaResolver
 from config.configuration import DELAYS_BETWEEN_DAY_MONITORING_SECONDS, MONITORING_DATE_RANGE_DAYS, \
     MONITORING_DATE_RANGE_START_FROM_DELTA
 from model.models import Slot, SlotReservation
@@ -16,8 +17,9 @@ from notification.notifier import Notifier
 
 
 class SlotReserver:
-    def __init__(self, driver: Chrome, notifier: Notifier, office_id: int):
+    def __init__(self, driver: Chrome, notifier: Notifier, captcha_resolver: CaptchaResolver, office_id: int):
         self.notifier = notifier
+        self.captcha_resolver = captcha_resolver
         self.driver = driver
         self.office_id = office_id
         self.driver_wait = WebDriverWait(driver=self.driver, timeout=15)
@@ -100,6 +102,11 @@ class SlotReserver:
 
     def approve_reservation(self, reservation: SlotReservation):
         logger.success(f"Approving reservation {reservation.slot.ch_date} {reservation.slot.ch_time}...")
+
+        self.driver.refresh()
+
+        if self.captcha_resolver.has_captcha():
+            self.captcha_resolver.resolve_captcha()
 
         self.driver.execute_script(f"window.location.href = '{reservation.reservation_url}';")
 

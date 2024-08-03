@@ -1,5 +1,5 @@
 from loguru import logger
-from selenium.common import NoSuchElementException
+from selenium.common import NoSuchElementException, TimeoutException
 from selenium.webdriver import Chrome
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
@@ -17,6 +17,7 @@ class CaptchaResolver:
 
     def has_captcha(self) -> bool:
         try:
+            self.driver.refresh()
             self.driver_wait.until(EC.visibility_of(self.driver.find_element(By.XPATH, '//iframe[@title="reCAPTCHA"]')))
             logger.info("reCAPTCHA iframe found! Resolving captcha...")
             return True
@@ -40,7 +41,7 @@ class CaptchaResolver:
 
                     solved = True
                     break
-                except:
+                except TimeoutException:
                     logger.warning(f"[Attempt #{i + 1}] Failed to resolve captcha... Trying again...")
                     self.driver.refresh()
                     continue

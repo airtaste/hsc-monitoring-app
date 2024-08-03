@@ -6,23 +6,35 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 
+from captcha.captcha_resolver import CaptchaResolver
 from config.configuration import AUTH_TIMER_THRESHOLD_SECONDS, AUTHENTICATOR_MODE, EUID_KEY_PASSWORD, EUID_KEY_PATH
 from notification.notifier import Notifier
 
 
 class Authenticator:
 
-    def __init__(self, driver: Chrome, notifier: Notifier):
+    def __init__(self, driver: Chrome, notifier: Notifier, captcha_resolver: CaptchaResolver):
         self.driver = driver
+        self.captcha_resolver = captcha_resolver
         self.driver_wait = WebDriverWait(driver=self.driver, timeout=30)
         self.notifier = notifier
 
-    def try_authenticate(self):
+    def try_authenticate(self) -> bool:
         self.driver.get("https://eq.hsc.gov.ua/")
-        if AUTHENTICATOR_MODE == 'BANK_ID':
-            self.bank_id_authenticate()
-        else:
-            self.euid_authenticate()
+        logger.info("Authentication to https://eq.hsc.gov.ua/ started...")
+
+        try:
+            if AUTHENTICATOR_MODE == 'BANK_ID':
+                self.bank_id_authenticate()
+            else:
+                self.euid_authenticate()
+
+            if self.captcha_resolver.has_captcha():
+                self.captcha_resolver.resolve_captcha()
+        except:
+            return False
+
+        return True
 
     def bank_id_authenticate(self):
         # Authorize via bank id
