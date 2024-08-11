@@ -1,9 +1,19 @@
+from datetime import datetime
+from pathlib import Path
 from time import sleep
 
 from selenium.webdriver import Keys, ActionChains
+from selenium.webdriver import Chrome
+
+from config.configuration import SCREENSHOTS_FOLDER
 
 
-def cleanup_browser_cache(driver):
+def take_screenshot(driver: Chrome) -> bool:
+    screenshot_file_path = Path(f"{SCREENSHOTS_FOLDER}/screenshot_{datetime.now().microsecond}.png").absolute()
+    return driver.save_screenshot(screenshot_file_path)
+
+
+def cleanup_browser_cache(driver: Chrome):
     # Cleanup browser cache
     driver.execute_script("window.open('');")
     sleep(2)

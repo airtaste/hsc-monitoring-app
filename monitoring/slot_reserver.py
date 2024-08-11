@@ -1,7 +1,11 @@
 import json
+import os
 import random
 from datetime import datetime, timedelta
+from io import BytesIO
+from pathlib import Path
 from time import sleep
+from typing import Optional
 
 from loguru import logger
 from selenium.webdriver import Chrome
@@ -11,9 +15,11 @@ from selenium.webdriver.support.wait import WebDriverWait
 
 from captcha.captcha_resolver import CaptchaResolver
 from config.configuration import DELAYS_BETWEEN_DAY_MONITORING_SECONDS, MONITORING_DATE_RANGE_DAYS, \
-    MONITORING_DATE_RANGE_START_FROM_DELTA
+    MONITORING_DATE_RANGE_START_FROM_DELTA, BROWSER_DOWNLOADS_FOLDER
+from exceptions.exceptions import ReservationException, ReservationApprovalException
 from model.models import Slot, SlotReservation
 from notification.notifier import Notifier
+from utils.driver_utils import take_screenshot
 
 
 class SlotReserver:
@@ -22,97 +28,135 @@ class SlotReserver:
         self.captcha_resolver = captcha_resolver
         self.driver = driver
         self.office_id = office_id
-        self.driver_wait = WebDriverWait(driver=self.driver, timeout=15)
+        self.driver_wait = WebDriverWait(driver=self.driver, timeout=30)
 
     def get_free_slots(self) -> list[Slot]:
         start_from = datetime.today() + timedelta(days=MONITORING_DATE_RANGE_START_FROM_DELTA)
         date_range = [(start_from + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(MONITORING_DATE_RANGE_DAYS)]
         logger.info(f"Trying to get free slots with date range from {date_range[0]} to {date_range[-1]}")
-
         for date in date_range:
-            get_slots_script = f"""
-                var xhr = new XMLHttpRequest();
-                xhr.open('POST', 'https://eq.hsc.gov.ua/site/freetimes', false);
-                xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
-                xhr.setRequestHeader('Accept-Language', 'uk-UA,uk;q=0.9,en-US;q=0.8,en;q=0.7');
-                xhr.setRequestHeader('X-Csrf-Token', document.getElementsByName('csrf-token')[0].getAttribute('content'));
-                xhr.setRequestHeader('Accept', '*/*');
-                xhr.setRequestHeader('Cache-Control', 'no-cache');
-                xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
-                xhr.send('office_id={self.office_id}&date_of_admission={date}&question_id=55&es_date=&es_time=');
-                return xhr.responseText;
-            """
+            try:
+                get_slots_script = f"""
+                    var xhr = new XMLHttpRequest();
+                    xhr.open('POST', 'https://eq.hsc.gov.ua/site/freetimes', false);
+                    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
+                    xhr.setRequestHeader('Accept-Language', 'uk-UA,uk;q=0.9,en-US;q=0.8,en;q=0.7');
+                    xhr.setRequestHeader('X-Csrf-Token', document.getElementsByName('csrf-token')[0].getAttribute('content'));
+                    xhr.setRequestHeader('Accept', '*/*');
+                    xhr.setRequestHeader('Cache-Control', 'no-cache');
+                    xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+                    xhr.send('office_id={self.office_id}&date_of_admission={date}&question_id=55&es_date=&es_time=');
+                    return xhr.responseText;
+                """
 
-            response = self.driver.execute_script(get_slots_script)
-            response_json = json.loads(response)
+                response = self.driver.execute_script(get_slots_script)
+                response_json = json.loads(response)
 
-            free_slots = response_json['rows']
+                free_slots = response_json['rows']
 
-            logger.info(f"Available slots on date {date}: {free_slots}")
+                logger.info(f"Available slots on date {date}: {free_slots}")
 
-            if free_slots:
-                self.notifier.notify_free_slots_found()
-                logger.success(f"Found free slots on date {date}! Processing...")
-                return [Slot(slot_id=item['id'], date=date, ch_time=item['chtime']) for item in response_json['rows']]
+                if free_slots:
+                    logger.success(f"Found free slots on date {date}! Processing...")
+                    return [Slot(slot_id=item['id'], date=date, ch_time=item['chtime']) for item in response_json['rows']]
 
-            sleep_time = random.uniform(*DELAYS_BETWEEN_DAY_MONITORING_SECONDS)
-            logger.info(f"Sleep for {sleep_time:.1f} seconds after requesting free slots for {date} date...")
-            sleep(sleep_time)
+                sleep_time = random.uniform(*DELAYS_BETWEEN_DAY_MONITORING_SECONDS)
+                logger.info(f"Sleep for {sleep_time:.1f} seconds after requesting free slots for {date} date...")
+                sleep(sleep_time)
+            except Exception as e:
+                logger.error(f"Failed to fetch free slots on date {date}. Unexpected error '{e}'. Continuing...")
+                continue
 
         return []
 
-    def create_slot_reservation(self, slots: list[Slot]) -> SlotReservation:
+    def reserve_slot(self, slot: Slot) -> SlotReservation:
         logger.info("Reserving first available slot...")
-
-        for slot in slots:
-            reserve_slots_script = f"""
-                var xhr = new XMLHttpRequest();
-                xhr.open('POST', 'https://eq.hsc.gov.ua/site/reservecherga', false);
-                xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
-                xhr.setRequestHeader('Accept-Language', 'uk-UA,uk;q=0.9,en-US;q=0.8,en;q=0.7');
-                xhr.setRequestHeader('X-Csrf-Token', document.getElementsByName('csrf-token')[0].getAttribute('content'));
-                xhr.setRequestHeader('Accept', '*/*');
-                xhr.setRequestHeader('Cache-Control', 'no-cache');
-                xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
-                xhr.send('id_chtime={slot.id}&question_id=55&email=m4ksymdoroshenko@gmail.com');
-                
-                var responseContent = xhr.responseText;
-                var redirectUrl = xhr.getResponseHeader('X-Redirect');
-                
-                return JSON.stringify({{
-                    "content": responseContent,
-                    "redirect-to": redirectUrl
-                }});
-            """
-
-            response = self.driver.execute_script(reserve_slots_script)
-            response_json = json.loads(response)
-
-            if response_json['content'] == 'error01':
-                logger.info(f"Cannot reserve slot {slot.ch_date} {slot.ch_time}. Seems it's already taken. Continuing...")
-                continue
-
-            self.notifier.notify_reservation_start(slot)
-            logger.success(f"Reserved slot on {slot.ch_date} {slot.ch_time}!")
-
-            return SlotReservation(
-                reservation_url=response_json['redirect-to'],
-                slot=slot,
-            )
-
-    def approve_reservation(self, reservation: SlotReservation):
-        logger.success(f"Approving reservation {reservation.slot.ch_date} {reservation.slot.ch_time}...")
 
         self.driver.refresh()
 
         if self.captcha_resolver.has_captcha():
-            self.captcha_resolver.resolve_captcha()
+            self.captcha_resolver.resolve_captcha_code()
 
-        self.driver.execute_script(f"window.location.href = '{reservation.reservation_url}';")
+        reservation = self._get_reservation(slot)
 
-        self.driver_wait.until(EC.element_to_be_clickable(
-            self.driver.find_element(by=By.XPATH, value="//a[@href='/site/finish']"))
-        ).click()
+        if not reservation:
+            raise ReservationException(f"Cannot reserve slot {slot.ch_date} {slot.ch_time}. Seems it's already taken.")
+        else:
+            logger.success(f"Reserved slot on {slot.ch_date} {slot.ch_time}!")
+            self.notifier.notify_reservation_start(slot)
 
-        self.notifier.notify_slot_reserved(reservation.slot)
-        logger.success(f"Reservation {reservation.slot.ch_date} {reservation.slot.ch_time} approved!")
+            return reservation
+
+    def approve_reservation(self, reservation: SlotReservation):
+        try:
+            logger.info(f"Approving reservation {reservation.slot.ch_date} {reservation.slot.ch_time}...")
+
+            self.driver.execute_script(f"window.location.href = '{reservation.reservation_url}';")
+
+            self.driver_wait.until(EC.url_to_be(reservation.reservation_url))
+
+            self.driver.implicitly_wait(60)
+            self.driver_wait.until(EC.visibility_of(
+                self.driver.find_element(by=By.CLASS_NAME, value="btn-hsc-green"))
+            ).click()
+            self.driver.implicitly_wait(0)
+
+            self.driver_wait.until(EC.url_to_be('https://eq.hsc.gov.ua/step0'))
+            self._download_file(reservation.slot)
+
+            logger.success(f"Reservation {reservation.slot.ch_date} {reservation.slot.ch_time} approved!")
+        except Exception as e:
+            logger.error(f"Error during reservation approval: {e}")
+            take_screenshot(self.driver)
+            raise ReservationApprovalException(e)
+
+    def _get_reservation(self, slot: Slot) -> Optional[SlotReservation]:
+        reserve_slots_script = f"""
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', 'https://eq.hsc.gov.ua/site/reservecherga', false);
+            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
+            xhr.setRequestHeader('Accept-Language', 'uk-UA,uk;q=0.9,en-US;q=0.8,en;q=0.7');
+            xhr.setRequestHeader('X-Csrf-Token', document.getElementsByName('csrf-token')[0].getAttribute('content'));
+            xhr.setRequestHeader('Accept', '*/*');
+            xhr.setRequestHeader('Cache-Control', 'no-cache');
+            xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+            xhr.send('id_chtime={slot.id}&question_id=55&email=m4ksymdoroshenko@gmail.com');
+
+            var responseContent = xhr.responseText;
+            var redirectUrl = xhr.getResponseHeader('X-Redirect');
+
+            return JSON.stringify({{
+                "content": responseContent,
+                "redirect-to": redirectUrl
+            }});
+        """
+
+        response = self.driver.execute_script(reserve_slots_script)
+        response_json = json.loads(response)
+
+        if response_json['content'] == 'error01':
+            logger.warning(f"Cannot reserve slot {slot.ch_date} {slot.ch_time}. Seems it's already taken.")
+            return None
+        else:
+            return SlotReservation(reserved_at=datetime.now(), reservation_url=response_json['redirect-to'], slot=slot)
+
+    def _download_file(self, slot: Slot):
+        slot_date = datetime.strptime(slot.ch_date, "%Y-%m-%d").strftime("%d.%m.%y")
+        file_path = Path(f"{BROWSER_DOWNLOADS_FOLDER}/Талон.pdf").absolute()
+        search_text = f"ДАТА {slot_date} ЧАС {slot.ch_time}"
+
+        try:
+            self.driver_wait.until(
+                EC.presence_of_element_located((By.XPATH, f"//div[.//strong[contains(text(), '{search_text}')]]"))
+            ).find_element(By.XPATH, ".//a[contains(@href, '/site/mpdf')]").click()
+
+            with open(file_path, 'rb') as file:
+                file_name = f"Талон_{slot.ch_date.replace('-', '_')}.pdf"
+                talon_pdf = (file_name, BytesIO(file.read()), 'application/octet-stream')
+
+                self.notifier.notify_slot_reserved(slot, talon_pdf)
+        except Exception as e:
+            logger.error(f"Error during file downloading: {e}")
+        finally:
+            if os.path.exists(file_path):
+                os.remove(file_path)

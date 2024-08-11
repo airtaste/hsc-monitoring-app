@@ -1,5 +1,7 @@
 import random
 import time
+from datetime import datetime
+from pathlib import Path
 from time import sleep
 
 from loguru import logger
@@ -9,8 +11,10 @@ from webdriver_manager.chrome import ChromeDriverManager
 
 from auth.authenticator import Authenticator
 from captcha.captcha_resolver import CaptchaResolver
-from config.configuration import TELEGRAM_BOT_TOKEN_ID, CHAT_ID, HSC_OFFICE_ID_LVIV, \
-    REAUTH_THRESHOLD_HOURS, DELAYS_BETWEEN_SEARCH_ATTEMPT_SECONDS, HEADLESS_MODE, HSC_OFFICE_LOCATION
+from config.configuration import TELEGRAM_BOT_TOKEN_ID, CHAT_ID, HSC_OFFICE_ID, \
+    REAUTH_THRESHOLD_HOURS, DELAYS_BETWEEN_SEARCH_ATTEMPT_SECONDS, HEADLESS_MODE, HSC_OFFICE_LOCATION, \
+    APPROVE_RESERVATION_RETRY_THRESHOLD, BROWSER_DOWNLOADS_FOLDER
+from exceptions.exceptions import ReservationApprovalException
 from monitoring.slot_reserver import SlotReserver
 from notification.notifier import Notifier
 from utils.driver_utils import cleanup_browser_cache
@@ -23,18 +27,27 @@ if __name__ == '__main__':
     if HEADLESS_MODE:
         options.add_argument('--headless')
     options.add_argument("--disable-blink-features=AutomationControlled")
+    prefs = {
+        'download.default_directory': str(Path(BROWSER_DOWNLOADS_FOLDER).absolute()),
+        "download.prompt_for_download": False,
+        "download.directory_upgrade": True,
+        "safebrowsing.enabled": True
+    }
+    options.add_experimental_option('prefs', prefs)
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option('useAutomationExtension', False)
     chrome_service = Service(executable_path=ChromeDriverManager().install())
     driver = webdriver.Chrome(service=chrome_service, options=options)
 
     driver.execute_cdp_cmd("Emulation.setGeolocationOverride", HSC_OFFICE_LOCATION)
-    driver.execute_cdp_cmd("Browser.grantPermissions", {"origin": "https://eq.hsc.gov.ua/", "permissions": ["geolocation"]})
+    driver.execute_cdp_cmd("Browser.grantPermissions",
+                           {"origin": "https://eq.hsc.gov.ua/", "permissions": ["geolocation"]})
 
     notifier = Notifier(token_id=TELEGRAM_BOT_TOKEN_ID, chat_id=CHAT_ID)
     captcha_resolver = CaptchaResolver(driver=driver)
     authenticator = Authenticator(driver=driver, notifier=notifier, captcha_resolver=captcha_resolver)
-    slot_reserver = SlotReserver(driver=driver, notifier=notifier, captcha_resolver=captcha_resolver, office_id=HSC_OFFICE_ID_LVIV)
+    slot_reserver = SlotReserver(driver=driver, notifier=notifier, captcha_resolver=captcha_resolver,
+                                 office_id=HSC_OFFICE_ID)
 
     has_reserved_slots = False
 
@@ -46,10 +59,7 @@ if __name__ == '__main__':
 
             auth_start = time.time()
 
-            authenticated = authenticator.try_authenticate()
-
-            if not authenticated:
-                raise Exception("Cannot authenticate to site. Stopping application gracefully...")
+            authenticator.try_authenticate()
 
             while True:
                 auth_current = time.time()
@@ -62,14 +72,28 @@ if __name__ == '__main__':
                 free_slots = slot_reserver.get_free_slots()
 
                 if free_slots:
-                    reservation = slot_reserver.create_slot_reservation(free_slots)
-                    slot_reserver.approve_reservation(reservation)
-                    has_reserved_slots = True
-                    break
+                    slot = random.choice(free_slots)
+                    reservation = slot_reserver.reserve_slot(slot)
+
+                    for i in range(APPROVE_RESERVATION_RETRY_THRESHOLD):
+                        try:
+                            slot_reserver.approve_reservation(reservation)
+
+                            has_reserved_slots = True
+                            break
+                        except ReservationApprovalException as e:
+                            logger.warning(f"Cannot approve reservation '{reservation.reservation_url}'. Trying again...")
+                            if datetime.now() > reservation.expired_at:
+                                reservation = slot_reserver.reserve_slot(slot)
+
+                            sleep(15)
+                            continue
+
+                    if has_reserved_slots:
+                        break
 
                 sleep_time = random.uniform(*DELAYS_BETWEEN_SEARCH_ATTEMPT_SECONDS)
-                logger.info(
-                    f"Nothing was found during search attempt. Sleep for {sleep_time:.1f} seconds until next try...")
+                logger.info(f"Nothing was found during search attempt. Sleep for {sleep_time:.1f} seconds until next try...")
                 sleep(sleep_time)
     except Exception as e:
         logger.error(e)

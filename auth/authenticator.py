@@ -1,14 +1,18 @@
 from pathlib import Path
 
 from loguru import logger
+from selenium.common import TimeoutException, NoSuchElementException
 from selenium.webdriver import Chrome
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 
 from captcha.captcha_resolver import CaptchaResolver
-from config.configuration import AUTH_TIMER_THRESHOLD_SECONDS, AUTHENTICATOR_MODE, EUID_KEY_PASSWORD, EUID_KEY_PATH
+from config.configuration import AUTH_TIMER_THRESHOLD_SECONDS, AUTHENTICATOR_MODE, EUID_KEY_PASSWORD, EUID_KEY_PATH, \
+    AUTH_RETRY_THRESHOLD
+from exceptions.exceptions import AuthenticationException
 from notification.notifier import Notifier
+from utils.driver_utils import take_screenshot
 
 
 class Authenticator:
@@ -20,21 +24,27 @@ class Authenticator:
         self.notifier = notifier
 
     def try_authenticate(self) -> bool:
-        self.driver.get("https://eq.hsc.gov.ua/")
         logger.info("Authentication to https://eq.hsc.gov.ua/ started...")
 
-        try:
-            if AUTHENTICATOR_MODE == 'BANK_ID':
-                self.bank_id_authenticate()
-            else:
-                self.euid_authenticate()
+        for i in range(AUTH_RETRY_THRESHOLD):
+            self.driver.get("https://eq.hsc.gov.ua/")
 
-            if self.captcha_resolver.has_captcha():
-                self.captcha_resolver.resolve_captcha()
-        except:
-            return False
+            try:
+                if AUTHENTICATOR_MODE == 'BANK_ID':
+                    self.bank_id_authenticate()
+                else:
+                    self.euid_authenticate()
 
-        return True
+                if self.captcha_resolver.has_captcha():
+                    self.captcha_resolver.resolve_captcha_code()
+
+                return True
+            except (NoSuchElementException, TimeoutException):
+                logger.warning(f"[Attempt #{i + 1}] Failed to authenticate... Trying again...")
+                continue
+
+        take_screenshot(self.driver)
+        raise AuthenticationException("Cannot authenticate to site 'https://eq.hsc.gov.ua/'. Retries limit exceeded.")
 
     def bank_id_authenticate(self):
         # Authorize via bank id
@@ -99,7 +109,7 @@ class Authenticator:
         ).click()
 
         # Wait until button would be ready
-        self.driver.implicitly_wait(AUTH_TIMER_THRESHOLD_SECONDS)
+        self.driver.implicitly_wait(30)
         self.driver_wait.until(
             EC.element_to_be_clickable(self.driver.find_element(by=By.ID, value="btnAcceptUserDataAgreement"))
         ).click()

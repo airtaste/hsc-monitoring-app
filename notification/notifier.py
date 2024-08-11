@@ -11,7 +11,7 @@ class Notifier:
 
     def notify_wait_auth(self, authorization_link: str):
         msg = f"""
-            <b>Important:</b> You need to authenticate ASAP within the next 5 minutes! Please click the link below to complete the authentication process:
+            <b>Важливо:</b> Вам необхідно авторизуватись у найближчий час! Будь-ласка, натисніть кнопку нижче, щоб завершити процес авторизації
         """
         payload = {
             'chat_id': self.chat_id,
@@ -21,7 +21,7 @@ class Notifier:
                 'inline_keyboard': [
                     [
                         {
-                            'text': 'Authenticate Now',
+                            'text': 'Авторизуватись',
                             'url': authorization_link
                         }
                     ]
@@ -33,7 +33,7 @@ class Notifier:
 
     def notify_auth_success(self):
         msg = f"""
-            <b>Update:</b> Authorized to https://eq.hsc.gov.ua/ successfully!
+            <b>Оновлення:</b> Вас було успішно авторизовано до сайту МВС України!
         """
         payload = {
             'chat_id': self.chat_id,
@@ -45,8 +45,7 @@ class Notifier:
 
     def notify_reservation_start(self, slot: Slot):
         msg = f"""
-            <b>Update:</b> A slot reservation started <b>{slot.ch_date} {slot.ch_time}</b>.
-            Once slot would be reserved you would retrieve notification about reservation!
+            <b>Оновлення:</b> Знайдено талон на дату <b>{slot.ch_date} {slot.ch_time}</b>. Намагаюсь забронювати час та підтвердити взяття талону... Як тільки мені це вдасться - я обов'язково вас повідомлю про це!
         """
         payload = {
             'chat_id': self.chat_id,
@@ -56,28 +55,15 @@ class Notifier:
 
         requests.post("https://api.telegram.org/bot{token}/sendMessage".format(token=self.token_id), data=payload)
 
-    def notify_free_slots_found(self):
+    def notify_slot_reserved(self, slot: Slot, slot_pdf):
         msg = f"""
-            <b>Update:</b> Free slots found! Reservation is on the way...</b>.
-            Once slot would be reserved you would retrieve notification about reservation!
+            <b>Оновлення:</b> Талон на здачу практичного іспиту (механічна коробка передачі) на машині сервісного центру МВС успішно взято на дату <b>{slot.ch_date} {slot.ch_time}</b>. Щасти на іспиті!
         """
         payload = {
             'chat_id': self.chat_id,
-            'text': msg,
+            'caption': msg,
             'parse_mode': 'html'
         }
 
-        requests.post("https://api.telegram.org/bot{token}/sendMessage".format(token=self.token_id), data=payload)
-
-    def notify_slot_reserved(self, slot: Slot):
-        msg = f"""
-            <b>Update:</b> A slot has been reserved for you on <b>{slot.ch_date} {slot.ch_time}</b>.
-             Good luck!
-        """
-        payload = {
-            'chat_id': self.chat_id,
-            'text': msg,
-            'parse_mode': 'html'
-        }
-
-        requests.post("https://api.telegram.org/bot{token}/sendMessage".format(token=self.token_id), data=payload)
+        requests.post("https://api.telegram.org/bot{token}/sendDocument"
+                      .format(token=self.token_id), data=payload, files={'document': slot_pdf})
