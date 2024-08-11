@@ -15,7 +15,7 @@ from selenium.webdriver.support.wait import WebDriverWait
 
 from captcha.captcha_resolver import CaptchaResolver
 from config.configuration import DELAYS_BETWEEN_DAY_MONITORING_SECONDS, MONITORING_DATE_RANGE_DAYS, \
-    MONITORING_DATE_RANGE_START_FROM_DELTA, BROWSER_DOWNLOADS_FOLDER
+    MONITORING_DATE_RANGE_START_FROM_DELTA, BROWSER_DOWNLOADS_FOLDER, USER_EMAIL
 from exceptions.exceptions import ReservationException, ReservationApprovalException
 from model.models import Slot, SlotReservation
 from notification.notifier import Notifier
@@ -120,7 +120,7 @@ class SlotReserver:
             xhr.setRequestHeader('Accept', '*/*');
             xhr.setRequestHeader('Cache-Control', 'no-cache');
             xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
-            xhr.send('id_chtime={slot.id}&question_id=55&email=m4ksymdoroshenko@gmail.com');
+            xhr.send('id_chtime={slot.id}&question_id=55&email={USER_EMAIL}');
 
             var responseContent = xhr.responseText;
             var redirectUrl = xhr.getResponseHeader('X-Redirect');

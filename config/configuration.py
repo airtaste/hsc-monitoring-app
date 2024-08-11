@@ -31,16 +31,18 @@ HEADLESS_MODE = False
 # Mode of authentication. Possible values is: BANK_ID, EUID.
 AUTHENTICATOR_MODE = 'EUID'
 # Authentication key file path
-EUID_KEY_PATH = "euid/Key-6"
+EUID_KEY_PATH = 'euid/Key-6'
 # Password for euid key (confidential information)
 EUID_KEY_PASSWORD = ''
 # Folder name for saved screenshots
-SCREENSHOTS_FOLDER = "screenshots"
+SCREENSHOTS_FOLDER = 'screenshots'
 # Folder name for downloaded files
-BROWSER_DOWNLOADS_FOLDER = "downloads"
+BROWSER_DOWNLOADS_FOLDER = 'downloads'
 # HSC office location that would be used during slot reservation (in action with map)
 HSC_OFFICE_LOCATION = {
-    "latitude": 49.829620,
-    "longitude": 23.941710,
-    "accuracy": 200
+    'latitude': 49.829620,
+    'longitude': 23.941710,
+    'accuracy': 200
 }
+# Email for slot notification after approval
+USER_EMAIL = ''
