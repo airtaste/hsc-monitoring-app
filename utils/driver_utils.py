@@ -1,6 +1,5 @@
-from datetime import datetime
 from pathlib import Path
-from time import sleep
+from time import sleep, time
 
 from selenium.webdriver import Keys, ActionChains
 from selenium.webdriver import Chrome
@@ -9,7 +8,8 @@ from config.configuration import SCREENSHOTS_FOLDER
 
 
 def take_screenshot(driver: Chrome) -> bool:
-    screenshot_file_path = Path(f"{SCREENSHOTS_FOLDER}/screenshot_{datetime.now().microsecond}.png").absolute()
+    ts = int(time()) * 1000
+    screenshot_file_path = Path(f"{SCREENSHOTS_FOLDER}/screenshot_{ts}.png").absolute()
     return driver.save_screenshot(screenshot_file_path)
 
 
