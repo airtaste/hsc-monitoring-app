@@ -9,7 +9,7 @@ DELAYS_BETWEEN_SEARCH_ATTEMPT_SECONDS = (60, 120)
 # Delay range for particular day monitoring attempt
 DELAYS_BETWEEN_DAY_MONITORING_SECONDS = (3, 5)
 # Time for authentication process, after exceeding this you would probably need to perform re-auth
-AUTH_TIMER_THRESHOLD_SECONDS = 600
+AUTH_TIMER_THRESHOLD_SECONDS = 1200
 # Automatic re-auth time in hours, after exceeding this you would logout from system
 REAUTH_THRESHOLD_HOURS = 3
 # Count of retries for captcha solving
@@ -22,10 +22,6 @@ TWOCAPTCHA_API_KEY = ''
 HSC_SITE_KEY = '6LcB0uQpAAAAALf4UuMsrkL3eYWGIcBrrVu__Y8T'
 # Count of authentication retries
 AUTH_RETRY_THRESHOLD = 5
-# Days delta to start searching from starting from today (e.g. 4 would mean that you will start searching from 'today + 4 days')
-MONITORING_DATE_RANGE_START_FROM_DELTA = 3
-# Days to define date range for monitoring slots on exam
-MONITORING_DATE_RANGE_DAYS = 18
 # Flag to define if GUI for browser should be disabled (false by default)
 HEADLESS_MODE = False
 # Mode of authentication. Possible values is: BANK_ID, EUID.
