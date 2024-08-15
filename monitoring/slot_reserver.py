@@ -1,7 +1,7 @@
 import json
 import os
 import random
-from datetime import datetime, timedelta
+from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from time import sleep
@@ -14,8 +14,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 
 from captcha.captcha_resolver import CaptchaResolver
-from config.configuration import DELAYS_BETWEEN_DAY_MONITORING_SECONDS, MONITORING_DATE_RANGE_DAYS, \
-    MONITORING_DATE_RANGE_START_FROM_DELTA, BROWSER_DOWNLOADS_FOLDER, USER_EMAIL
+from config.configuration import DELAYS_BETWEEN_DAY_MONITORING_SECONDS, BROWSER_DOWNLOADS_FOLDER, USER_EMAIL
 from exceptions.exceptions import ReservationException, ReservationApprovalException
 from model.models import Slot, SlotReservation
 from notification.notifier import Notifier
@@ -28,11 +27,66 @@ class SlotReserver:
         self.captcha_resolver = captcha_resolver
         self.driver = driver
         self.office_id = office_id
+        self.available_dates_map = {}
         self.driver_wait = WebDriverWait(driver=self.driver, timeout=30)
 
+    def _propagate_available_dates(self):
+        self.driver.refresh()
+
+        if self.captcha_resolver.has_captcha():
+            self.captcha_resolver.resolve_captcha_code()
+
+        go_to_dates_url_script = """
+            location.href = 'https://eq.hsc.gov.ua/site/step1?value=55'
+        """
+
+        self.driver.execute_script(go_to_dates_url_script)
+        self.driver_wait.until(EC.url_to_be('https://eq.hsc.gov.ua/site/step1?value=55'))
+
+        get_available_dates_script = """
+            const dates = [];
+            const links = document.querySelectorAll('a[data-params]');
+            
+            links.forEach(link => {
+                const dataParamsStr = link.getAttribute('data-params');
+                let dataParamsObj;
+                try {
+                    dataParamsObj = JSON.parse(dataParamsStr.replace(/&quot;/g, '"'));
+                } catch (e) {
+                    console.error('Error parsing JSON:', e);
+                    return;
+                }
+                const date = dataParamsObj.chdate;
+                if (date) {
+                    dates.push(date);
+                }
+            });
+            
+            return JSON.stringify(dates);
+        """
+
+        response = self.driver.execute_script(get_available_dates_script)
+        self.available_dates_map[datetime.today().strftime('%Y-%m-%d')] = json.loads(response)
+
+        go_to_base_url_back_script = """
+            location.href = 'https://eq.hsc.gov.ua/site/step0'
+        """
+
+        self.driver.execute_script(go_to_base_url_back_script)
+        self.driver_wait.until(EC.url_to_be('https://eq.hsc.gov.ua/site/step0'))
+
+        if self.captcha_resolver.has_captcha():
+            self.captcha_resolver.resolve_captcha_code()
+
     def get_free_slots(self) -> list[Slot]:
-        start_from = datetime.today() + timedelta(days=MONITORING_DATE_RANGE_START_FROM_DELTA)
-        date_range = [(start_from + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(MONITORING_DATE_RANGE_DAYS)]
+        today = datetime.today().strftime('%Y-%m-%d')
+
+        if today in self.available_dates_map:
+            date_range = self.available_dates_map[today]
+        else:
+            self._propagate_available_dates()
+            date_range = self.available_dates_map[today]
+
         logger.info(f"Trying to get free slots with date range from {date_range[0]} to {date_range[-1]}")
         for date in date_range:
             try:
@@ -58,7 +112,8 @@ class SlotReserver:
 
                 if free_slots:
                     logger.success(f"Found free slots on date {date}! Processing...")
-                    return [Slot(slot_id=item['id'], date=date, ch_time=item['chtime']) for item in response_json['rows']]
+                    return [Slot(slot_id=item['id'], date=date, ch_time=item['chtime']) for item in
+                            response_json['rows']]
 
                 sleep_time = random.uniform(*DELAYS_BETWEEN_DAY_MONITORING_SECONDS)
                 logger.info(f"Sleep for {sleep_time:.1f} seconds after requesting free slots for {date} date...")
