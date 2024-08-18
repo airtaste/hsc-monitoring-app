@@ -45,7 +45,7 @@ class Notifier:
 
     def notify_reservation_start(self, slot: Slot):
         msg = f"""
-            <b>Оновлення:</b> Знайдено талон на дату <b>{slot.ch_date} {slot.ch_time}</b>. Намагаюсь забронювати час та підтвердити взяття талону... Як тільки мені це вдасться - я обов'язково вас повідомлю про це!
+            <b>Оновлення:</b> Знайдено талон на дату <b>{slot.ch_date} {slot.ch_time}</b>. Запустив процес бронювання часу...
         """
         payload = {
             'chat_id': self.chat_id,
@@ -55,15 +55,22 @@ class Notifier:
 
         requests.post("https://api.telegram.org/bot{token}/sendMessage".format(token=self.token_id), data=payload)
 
-    def notify_slot_reserved(self, slot: Slot, slot_pdf):
+    def notify_reservation_approved(self, slot: Slot):
         msg = f"""
             <b>Оновлення:</b> Талон на здачу практичного іспиту (механічна коробка передачі) на машині сервісного центру МВС успішно взято на дату <b>{slot.ch_date} {slot.ch_time}</b>. Щасти на іспиті!
         """
         payload = {
             'chat_id': self.chat_id,
-            'caption': msg,
+            'text': msg,
             'parse_mode': 'html'
         }
 
+        requests.post("https://api.telegram.org/bot{token}/sendMessage".format(token=self.token_id), data=payload)
+
+    def notify_with_pdf(self, slot_pdf):
+        payload = {
+            'chat_id': self.chat_id,
+            'parse_mode': 'html'
+        }
         requests.post("https://api.telegram.org/bot{token}/sendDocument"
                       .format(token=self.token_id), data=payload, files={'document': slot_pdf})

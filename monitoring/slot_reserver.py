@@ -75,9 +75,6 @@ class SlotReserver:
         self.driver.execute_script(go_to_base_url_back_script)
         self.driver_wait.until(EC.url_to_be('https://eq.hsc.gov.ua/site/step0'))
 
-        if self.captcha_resolver.has_captcha():
-            self.captcha_resolver.resolve_captcha_code()
-
     def get_free_slots(self) -> list[Slot]:
         today = datetime.today().strftime('%Y-%m-%d')
 
@@ -119,18 +116,14 @@ class SlotReserver:
                 logger.info(f"Sleep for {sleep_time:.1f} seconds after requesting free slots for {date} date...")
                 sleep(sleep_time)
             except Exception as e:
-                logger.error(f"Failed to fetch free slots on date {date}. Unexpected error '{e}'. Continuing...")
+                logger.error(f"Failed to fetch free slots on date {date}. Unexpected error '{str(e)}'. Continuing...")
                 continue
 
         return []
 
     def reserve_slot(self, slot: Slot) -> SlotReservation:
-        logger.info("Reserving first available slot...")
-
-        self.driver.refresh()
-
-        if self.captcha_resolver.has_captcha():
-            self.captcha_resolver.resolve_captcha_code()
+        logger.info("Reserving first available slot... Sleep 10 seconds first...")
+        sleep(10)
 
         reservation = self._get_reservation(slot)
 
@@ -144,6 +137,9 @@ class SlotReserver:
 
     def approve_reservation(self, reservation: SlotReservation):
         try:
+            if self.captcha_resolver.has_captcha():
+                self.captcha_resolver.resolve_captcha_code()
+
             logger.info(f"Approving reservation {reservation.slot.ch_date} {reservation.slot.ch_time}...")
 
             self.driver.execute_script(f"window.location.href = '{reservation.reservation_url}';")
@@ -154,14 +150,13 @@ class SlotReserver:
             self.driver_wait.until(EC.visibility_of(
                 self.driver.find_element(by=By.CLASS_NAME, value="btn-hsc-green"))
             ).click()
+            self.notifier.notify_reservation_approved(slot=reservation.slot)
+            self._download_file(slot=reservation.slot)
             self.driver.implicitly_wait(0)
-
-            self.driver_wait.until(EC.url_to_be('https://eq.hsc.gov.ua/step0'))
-            self._download_file(reservation.slot)
 
             logger.success(f"Reservation {reservation.slot.ch_date} {reservation.slot.ch_time} approved!")
         except Exception as e:
-            logger.error(f"Error during reservation approval: {e}")
+            logger.error(f"Error during reservation approval: {str(e)}")
             take_screenshot(self.driver)
             raise ReservationApprovalException(e)
 
@@ -198,7 +193,7 @@ class SlotReserver:
     def _download_file(self, slot: Slot):
         slot_date = datetime.strptime(slot.ch_date, "%Y-%m-%d").strftime("%d.%m.%y")
         file_path = Path(f"{BROWSER_DOWNLOADS_FOLDER}/Талон.pdf").absolute()
-        search_text = f"ДАТА {slot_date} ЧАС {slot.ch_time}"
+        search_text = f"ДАТА {slot_date}"
 
         try:
             self.driver_wait.until(
@@ -209,9 +204,9 @@ class SlotReserver:
                 file_name = f"Талон_{slot.ch_date.replace('-', '_')}.pdf"
                 talon_pdf = (file_name, BytesIO(file.read()), 'application/octet-stream')
 
-                self.notifier.notify_slot_reserved(slot, talon_pdf)
+                self.notifier.notify_with_pdf(talon_pdf)
         except Exception as e:
-            logger.error(f"Error during file downloading: {e}")
+            logger.error(f"Error during file downloading: {str(e)}")
         finally:
             if os.path.exists(file_path):
                 os.remove(file_path)
