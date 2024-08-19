@@ -1,8 +1,10 @@
 import asyncio
 import random
-import threading
+import sys
 import time
+from asyncio import Task
 from datetime import datetime
+from typing import Optional
 
 from loguru import logger
 from telegram import Bot, Update
@@ -19,39 +21,45 @@ from utils.driver_utils import cleanup_browser_cache, setup_chrome_driver
 
 
 # Control variable to manage the running state of the search
-is_search_running = False
-search_thread = None
+search_task: Optional[Task] = None
 
 
 async def search_stop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    global is_search_running
-    is_search_running = False
+    global search_task
+
     logger.info(f"Received '/search_stop' command from '{update.message.from_user.full_name}' with chat id '{update.message.chat_id}'")
+
+    if not update.message.chat_id == CHAT_ID:
+        await update.message.reply_text(f'⛔ У вас немає прав на запуск поточної команди. Зверніться за допомогою до адміна бота.')
+        return None
+
+    if search_task:
+        search_task.cancel()
+        search_task = None
+
     await update.message.reply_text(f'Пошук зупинено.')
 
 
 async def search_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    global is_search_running, search_thread
+    global search_task
 
     logger.info(f"Received '/search_start' command from '{update.message.from_user.full_name}' with chat id '{update.message.chat_id}'")
 
-    if update.message.chat_id != CHAT_ID:
-        await update.message.reply_text(f'У вас немає прав на запуск поточної команди. Зверніться за допомогою до адміна бота.')
-        return
+    if not update.message.chat_id == CHAT_ID:
+        await update.message.reply_text(f'⛔ У вас немає прав на запуск поточної команди. Зверніться за допомогою до адміна бота.')
+        return None
 
-    if is_search_running:
+    if search_task:
         await update.message.reply_text(f'Пошук вже запущено.')
-        return
+        return None
 
-    await update.message.reply_text(f'Запускаю пошук талонів в системі електронного запису МВС України...')
-    is_search_running = True
+    await update.message.reply_text(f'🔛 Запускаю пошук талонів в системі електронного запису МВС України...')
 
     async def run_search():
-        global is_search_running
         has_reserved_slots = False
 
         try:
-            while is_search_running:
+            while True:
                 if has_reserved_slots:
                     logger.success("Congratulations! Program successfully reserved slot for practice exam!")
                     break
@@ -59,7 +67,7 @@ async def search_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 auth_start = time.time()
                 await authenticator.try_authenticate()
 
-                while is_search_running:
+                while True:
                     auth_current = time.time()
 
                     if (auth_current - auth_start) / 3600 > REAUTH_THRESHOLD_HOURS:
@@ -78,8 +86,6 @@ async def search_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                             continue
 
                         for i in range(APPROVE_RESERVATION_RETRY_THRESHOLD):
-                            if not is_search_running:
-                                break
                             try:
                                 await slot_reserver.approve_reservation(reservation)
                                 has_reserved_slots = True
@@ -91,30 +97,26 @@ async def search_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                                 await asyncio.sleep(15)
                                 continue
 
-                        if has_reserved_slots or not is_search_running:
+                        if has_reserved_slots:
                             break
 
-                    if not is_search_running:
-                        break
                     sleep_time = random.uniform(*DELAYS_BETWEEN_SEARCH_ATTEMPT_SECONDS)
                     logger.info(f"Nothing was found during search attempt. Sleep for {sleep_time:.1f} seconds until next try...")
                     await asyncio.sleep(sleep_time)
         except Exception as e:
+            await notifier.notify_error(e)
             logger.error(e)
         finally:
-            await cleanup_browser_cache(driver)
             driver.delete_all_cookies()
+            driver.get('data:,')
+            await cleanup_browser_cache(driver)
 
-    # Start the search in a separate thread
-    loop = asyncio.get_event_loop()
-
-    def run_search_in_thread():
-        asyncio.run_coroutine_threadsafe(run_search(), loop)
-
-    search_thread = threading.Thread(target=run_search_in_thread)
-    search_thread.start()
+    search_task = asyncio.create_task(run_search())
 
 if __name__ == '__main__':
+    if sys.platform == 'win32':
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
     driver = setup_chrome_driver()
     tg_bot = Bot(token=TELEGRAM_BOT_TOKEN_ID)
     notifier = Notifier(bot=tg_bot, chat_id=CHAT_ID)

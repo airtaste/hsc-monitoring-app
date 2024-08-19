@@ -3,7 +3,6 @@ import json
 import os
 import random
 from datetime import datetime
-from io import BytesIO
 from pathlib import Path
 from time import sleep
 from typing import Optional
@@ -13,7 +12,6 @@ from selenium.webdriver import Chrome
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
-from telegram._utils.types import FileInput
 
 from captcha.captcha_resolver import CaptchaResolver
 from config.configuration import DELAYS_BETWEEN_DAY_MONITORING_SECONDS, BROWSER_DOWNLOADS_FOLDER, USER_EMAIL
@@ -204,9 +202,7 @@ class SlotReserver:
 
             with open(file_path, 'rb') as file:
                 file_name = f"Талон_{slot.ch_date.replace('-', '_')}.pdf"
-                talon_pdf = FileInput(filename=file_name, input_file_content=BytesIO(file.read()))
-
-                await self.notifier.notify_with_pdf(talon_pdf)
+                await self.notifier.notify_with_pdf(file, file_name)
         except Exception as e:
             logger.error(f"Error during file downloading: {str(e)}")
         finally:
