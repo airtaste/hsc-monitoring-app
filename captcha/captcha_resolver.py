@@ -18,7 +18,7 @@ class CaptchaResolver:
         self.recaptcha_solver = RecaptchaSolver(driver=self.driver)
         self.twocaptcha_solver = TwoCaptcha(apiKey=TWOCAPTCHA_API_KEY)
 
-    def has_captcha(self) -> bool:
+    async def has_captcha(self) -> bool:
         try:
             self.driver.refresh()
             self.driver_wait.until(EC.visibility_of(self.driver.find_element(By.XPATH, '//iframe[@title="reCAPTCHA"]')))
@@ -28,7 +28,7 @@ class CaptchaResolver:
             logger.info("No captcha found. Processing action as usual...")
             return False
 
-    def resolve_captcha_audio(self):
+    async def resolve_captcha_audio(self):
         solved = False
 
         for i in range(CAPTCHA_SOLVE_RETRY_THRESHOLD):
@@ -58,7 +58,7 @@ class CaptchaResolver:
         self.driver_wait.until(EC.url_to_be('https://eq.hsc.gov.ua/step0'))
         logger.success('Captcha resolved successfully!')
 
-    def resolve_captcha_code(self):
+    async def resolve_captcha_code(self):
         solved = False
 
         for i in range(CAPTCHA_SOLVE_RETRY_THRESHOLD):

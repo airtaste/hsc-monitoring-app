@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import random
@@ -12,6 +13,7 @@ from selenium.webdriver import Chrome
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
+from telegram._utils.types import FileInput
 
 from captcha.captcha_resolver import CaptchaResolver
 from config.configuration import DELAYS_BETWEEN_DAY_MONITORING_SECONDS, BROWSER_DOWNLOADS_FOLDER, USER_EMAIL
@@ -30,11 +32,11 @@ class SlotReserver:
         self.available_dates_map = {}
         self.driver_wait = WebDriverWait(driver=self.driver, timeout=30)
 
-    def _propagate_available_dates(self):
+    async def _propagate_available_dates(self):
         self.driver.refresh()
 
-        if self.captcha_resolver.has_captcha():
-            self.captcha_resolver.resolve_captcha_code()
+        if await self.captcha_resolver.has_captcha():
+            await self.captcha_resolver.resolve_captcha_code()
 
         go_to_dates_url_script = """
             location.href = 'https://eq.hsc.gov.ua/site/step1?value=55'
@@ -75,13 +77,13 @@ class SlotReserver:
         self.driver.execute_script(go_to_base_url_back_script)
         self.driver_wait.until(EC.url_to_be('https://eq.hsc.gov.ua/site/step0'))
 
-    def get_free_slots(self) -> list[Slot]:
+    async def get_free_slots(self) -> list[Slot]:
         today = datetime.today().strftime('%Y-%m-%d')
 
         if today in self.available_dates_map:
             date_range = self.available_dates_map[today]
         else:
-            self._propagate_available_dates()
+            await self._propagate_available_dates()
             date_range = self.available_dates_map[today]
 
         logger.info(f"Trying to get free slots with date range from {date_range[0]} to {date_range[-1]}")
@@ -114,31 +116,31 @@ class SlotReserver:
 
                 sleep_time = random.uniform(*DELAYS_BETWEEN_DAY_MONITORING_SECONDS)
                 logger.info(f"Sleep for {sleep_time:.1f} seconds after requesting free slots for {date} date...")
-                sleep(sleep_time)
+                await asyncio.sleep(sleep_time)
             except Exception as e:
                 logger.error(f"Failed to fetch free slots on date {date}. Unexpected error '{str(e)}'. Continuing...")
                 continue
 
         return []
 
-    def reserve_slot(self, slot: Slot) -> SlotReservation:
-        logger.info("Reserving first available slot... Sleep 10 seconds first...")
-        sleep(10)
+    async def reserve_slot(self, slot: Slot) -> SlotReservation:
+        sleep_time = random.uniform(*DELAYS_BETWEEN_DAY_MONITORING_SECONDS)
+        logger.info(f"Reserving first available slot... Sleep {sleep_time} seconds first...")
+        sleep(sleep_time)
 
-        reservation = self._get_reservation(slot)
+        reservation = await self._get_reservation(slot)
 
         if not reservation:
             raise ReservationException(f"Cannot reserve slot {slot.ch_date} {slot.ch_time}. Seems it's already taken.")
         else:
             logger.success(f"Reserved slot on {slot.ch_date} {slot.ch_time}!")
-            self.notifier.notify_reservation_start(slot)
-
+            await self.notifier.notify_reservation_start(slot)
             return reservation
 
-    def approve_reservation(self, reservation: SlotReservation):
+    async def approve_reservation(self, reservation: SlotReservation):
         try:
-            if self.captcha_resolver.has_captcha():
-                self.captcha_resolver.resolve_captcha_code()
+            if await self.captcha_resolver.has_captcha():
+                await self.captcha_resolver.resolve_captcha_code()
 
             logger.info(f"Approving reservation {reservation.slot.ch_date} {reservation.slot.ch_time}...")
 
@@ -150,17 +152,17 @@ class SlotReserver:
             self.driver_wait.until(EC.visibility_of(
                 self.driver.find_element(by=By.CLASS_NAME, value="btn-hsc-green"))
             ).click()
-            self.notifier.notify_reservation_approved(slot=reservation.slot)
-            self._download_file(slot=reservation.slot)
+            await self.notifier.notify_reservation_approved(slot=reservation.slot)
+            await self._download_file(slot=reservation.slot)
             self.driver.implicitly_wait(0)
 
             logger.success(f"Reservation {reservation.slot.ch_date} {reservation.slot.ch_time} approved!")
         except Exception as e:
             logger.error(f"Error during reservation approval: {str(e)}")
-            take_screenshot(self.driver)
+            await take_screenshot(self.driver)
             raise ReservationApprovalException(e)
 
-    def _get_reservation(self, slot: Slot) -> Optional[SlotReservation]:
+    async def _get_reservation(self, slot: Slot) -> Optional[SlotReservation]:
         reserve_slots_script = f"""
             var xhr = new XMLHttpRequest();
             xhr.open('POST', 'https://eq.hsc.gov.ua/site/reservecherga', false);
@@ -190,7 +192,7 @@ class SlotReserver:
         else:
             return SlotReservation(reserved_at=datetime.now(), reservation_url=response_json['redirect-to'], slot=slot)
 
-    def _download_file(self, slot: Slot):
+    async def _download_file(self, slot: Slot):
         slot_date = datetime.strptime(slot.ch_date, "%Y-%m-%d").strftime("%d.%m.%y")
         file_path = Path(f"{BROWSER_DOWNLOADS_FOLDER}/Талон.pdf").absolute()
         search_text = f"ДАТА {slot_date}"
@@ -202,9 +204,9 @@ class SlotReserver:
 
             with open(file_path, 'rb') as file:
                 file_name = f"Талон_{slot.ch_date.replace('-', '_')}.pdf"
-                talon_pdf = (file_name, BytesIO(file.read()), 'application/octet-stream')
+                talon_pdf = FileInput(filename=file_name, input_file_content=BytesIO(file.read()))
 
-                self.notifier.notify_with_pdf(talon_pdf)
+                await self.notifier.notify_with_pdf(talon_pdf)
         except Exception as e:
             logger.error(f"Error during file downloading: {str(e)}")
         finally:

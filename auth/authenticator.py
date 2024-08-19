@@ -23,7 +23,7 @@ class Authenticator:
         self.driver_wait = WebDriverWait(driver=self.driver, timeout=30)
         self.notifier = notifier
 
-    def try_authenticate(self) -> bool:
+    async def try_authenticate(self) -> bool:
         logger.info("Authentication to https://eq.hsc.gov.ua/ started...")
 
         for i in range(AUTH_RETRY_THRESHOLD):
@@ -31,22 +31,22 @@ class Authenticator:
 
             try:
                 if AUTHENTICATOR_MODE == 'BANK_ID':
-                    self.bank_id_authenticate()
+                    await self.bank_id_authenticate()
                 else:
-                    self.euid_authenticate()
+                    await self.euid_authenticate()
 
-                if self.captcha_resolver.has_captcha():
-                    self.captcha_resolver.resolve_captcha_code()
+                if await self.captcha_resolver.has_captcha():
+                    await self.captcha_resolver.resolve_captcha_code()
 
                 return True
             except (NoSuchElementException, TimeoutException):
                 logger.warning(f"[Attempt #{i + 1}] Failed to authenticate... Trying again...")
                 continue
 
-        take_screenshot(self.driver)
+        await take_screenshot(self.driver)
         raise AuthenticationException("Cannot authenticate to site 'https://eq.hsc.gov.ua/'. Retries limit exceeded.")
 
-    def bank_id_authenticate(self):
+    async def bank_id_authenticate(self):
         # Authorize via bank id
         self.driver_wait.until(
             EC.element_to_be_clickable(
@@ -63,7 +63,7 @@ class Authenticator:
         authentication_link = self.driver_wait.until(
             EC.visibility_of(self.driver.find_element(by=By.ID, value="qrcode"))).get_attribute("title")
         # Send authorization link via telegram bot
-        self.notifier.notify_wait_auth(authentication_link)
+        await self.notifier.notify_wait_auth(authentication_link)
         logger.info("Sent authentication link via telegram bot! Waiting for approval...")
         # Wait until button would be ready
         self.driver.implicitly_wait(AUTH_TIMER_THRESHOLD_SECONDS)
@@ -72,9 +72,9 @@ class Authenticator:
         ).click()
         self.driver.implicitly_wait(0)
         logger.success("Authorized to https://eq.hsc.gov.ua/ successfully!")
-        self.notifier.notify_auth_success()
+        await self.notifier.notify_auth_success()
 
-    def euid_authenticate(self):
+    async def euid_authenticate(self):
         # Authorize via euid key
         self.driver_wait.until(
             EC.element_to_be_clickable(
@@ -116,4 +116,4 @@ class Authenticator:
         self.driver.implicitly_wait(0)
 
         logger.success("Authorized to https://eq.hsc.gov.ua/ successfully!")
-        self.notifier.notify_auth_success()
+        await self.notifier.notify_auth_success()
