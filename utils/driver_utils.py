@@ -1,6 +1,6 @@
 import asyncio
 from pathlib import Path
-from time import sleep, time
+from time import time
 
 from selenium.webdriver import Keys, ActionChains
 from selenium.webdriver import Chrome

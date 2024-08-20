@@ -4,7 +4,6 @@ import os
 import random
 from datetime import datetime
 from pathlib import Path
-from time import sleep
 from typing import Optional
 
 from loguru import logger
@@ -124,7 +123,7 @@ class SlotReserver:
     async def reserve_slot(self, slot: Slot) -> SlotReservation:
         sleep_time = random.uniform(*DELAYS_BETWEEN_DAY_MONITORING_SECONDS)
         logger.info(f"Reserving first available slot... Sleep {sleep_time} seconds first...")
-        sleep(sleep_time)
+        await asyncio.sleep(sleep_time)
 
         reservation = await self._get_reservation(slot)
 
@@ -199,6 +198,9 @@ class SlotReserver:
             self.driver_wait.until(
                 EC.presence_of_element_located((By.XPATH, f"//div[.//strong[contains(text(), '{search_text}')]]"))
             ).find_element(By.XPATH, ".//a[contains(@href, '/site/mpdf')]").click()
+
+            # Wait for pdf to be downloaded
+            await asyncio.sleep(10)
 
             with open(file_path, 'rb') as file:
                 file_name = f"Талон_{slot.ch_date.replace('-', '_')}.pdf"
