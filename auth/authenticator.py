@@ -1,3 +1,4 @@
+from asyncio import sleep
 from pathlib import Path
 
 from loguru import logger
@@ -57,11 +58,11 @@ class Authenticator:
             self.driver.find_element(by=By.CSS_SELECTOR, value="a[href='/bankid-nbu-auth']"))).click()
         self.driver_wait.until(
             EC.element_to_be_clickable(self.driver.find_element(by=By.ID, value="selBankConnect-button"))).click()
-        self.driver_wait.until(EC.element_to_be_clickable(self.driver.find_element(by=By.ID, value="ui-id-4"))).click()
+        self.driver_wait.until(EC.element_to_be_clickable(self.driver.find_element(by=By.XPATH, value="//div[contains(text(), 'УНІВЕРСАЛ БАНК')]"))).click()
         self.driver_wait.until(
             EC.element_to_be_clickable(self.driver.find_element(by=By.ID, value="btnBankIDChoose"))).click()
-        authentication_link = self.driver_wait.until(
-            EC.visibility_of(self.driver.find_element(by=By.ID, value="qrcode"))).get_attribute("title")
+        await sleep(5)
+        authentication_link = self.driver_wait.until(EC.visibility_of(self.driver.find_element(by=By.ID, value="qrcode"))).get_attribute("title")
         # Send authorization link via telegram bot
         await self.notifier.notify_wait_auth(authentication_link)
         logger.info("Sent authentication link via telegram bot! Waiting for approval...")

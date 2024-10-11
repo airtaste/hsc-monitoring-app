@@ -6,9 +6,10 @@ from asyncio import Task
 from datetime import datetime
 from typing import Optional
 
+import telegram.error
 from loguru import logger
 from telegram import Bot, Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, CallbackQueryHandler
 
 from auth.authenticator import Authenticator
 from captcha.captcha_resolver import CaptchaResolver
@@ -29,15 +30,19 @@ async def search_stop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     logger.info(f"Received '/search_stop' command from '{update.message.from_user.full_name}' with chat id '{update.message.chat_id}'")
 
-    if not update.message.chat_id == CHAT_ID:
-        await update.message.reply_text(f'⛔ У вас немає прав на запуск поточної команди. Зверніться за допомогою до адміна бота.')
+    try:
+        if not update.message.chat_id == CHAT_ID:
+            await update.message.reply_text(f'⛔ У вас немає прав на запуск поточної команди. Зверніться за допомогою до адміна бота.')
+            return None
+
+        if search_task:
+            search_task.cancel()
+            search_task = None
+
+        await update.message.reply_text(f'Пошук зупинено.')
+    except telegram.error.Forbidden:
+        logger.error(f"'Cannot reply to the user '{update.message.from_user.full_name}'. Reason: bot was blocked by the user'")
         return None
-
-    if search_task:
-        search_task.cancel()
-        search_task = None
-
-    await update.message.reply_text(f'Пошук зупинено.')
 
 
 async def search_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -45,17 +50,23 @@ async def search_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     logger.info(f"Received '/search_start' command from '{update.message.from_user.full_name}' with chat id '{update.message.chat_id}'")
 
-    if not update.message.chat_id == CHAT_ID:
-        await update.message.reply_text(f'⛔ У вас немає прав на запуск поточної команди. Зверніться за допомогою до адміна бота.')
-        return None
+    try:
+        if not update.message.chat_id == CHAT_ID:
+            await update.message.reply_text(f'⛔ У вас немає прав на запуск поточної команди. Зверніться за допомогою до адміна бота.')
+            return None
 
-    if search_task:
-        await update.message.reply_text(f'Пошук вже запущено.')
+        if search_task:
+            await update.message.reply_text(f'Пошук вже запущено.')
+            return None
+    except telegram.error.Forbidden:
+        logger.error(f"'Cannot reply to the user '{update.message.from_user.full_name}'. Reason: bot was blocked by the user'")
         return None
 
     await update.message.reply_text(f'🔛 Запускаю пошук талонів в системі електронного запису МВС України...')
 
     async def run_search():
+        global search_task
+
         has_reserved_slots = False
 
         try:
@@ -106,6 +117,9 @@ async def search_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         except Exception as e:
             await notifier.notify_error(e)
             logger.error(e)
+            if search_task:
+                search_task.cancel()
+                search_task = None
         finally:
             driver.delete_all_cookies()
             driver.get('data:,')
