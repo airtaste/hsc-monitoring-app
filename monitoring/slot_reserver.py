@@ -13,7 +13,8 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 
 from captcha.captcha_resolver import CaptchaResolver
-from config.configuration import DELAYS_BETWEEN_DAY_MONITORING_SECONDS, BROWSER_DOWNLOADS_FOLDER, USER_EMAIL
+from config.configuration import DELAYS_BETWEEN_DAY_MONITORING_SECONDS, BROWSER_DOWNLOADS_FOLDER, USER_EMAIL, \
+    DELAY_BEFORE_RESERVATION_SECONDS
 from exceptions.exceptions import ReservationException, ReservationApprovalException
 from model.models import Slot, SlotReservation
 from notification.notifier import Notifier
@@ -46,6 +47,8 @@ class SlotReserver:
             const dates = [];
             const links = document.querySelectorAll('a[data-params]');
             
+            const today = new Date().toISOString().split('T')[0];
+            
             links.forEach(link => {
                 const dataParamsStr = link.getAttribute('data-params');
                 let dataParamsObj;
@@ -56,7 +59,7 @@ class SlotReserver:
                     return;
                 }
                 const date = dataParamsObj.chdate;
-                if (date) {
+                if (date && date !== today) {
                     dates.push(date);
                 }
             });
@@ -64,8 +67,9 @@ class SlotReserver:
             return JSON.stringify(dates);
         """
 
-        response = self.driver.execute_script(get_available_dates_script)
-        self.available_dates_map[datetime.today().strftime('%Y-%m-%d')] = json.loads(response)
+        available_dates_json = self.driver.execute_script(get_available_dates_script)
+        today = datetime.today().strftime('%Y-%m-%d')
+        self.available_dates_map[today] = json.loads(available_dates_json)
 
         go_to_base_url_back_script = """
             location.href = 'https://eq.hsc.gov.ua/site/step0'
@@ -77,11 +81,12 @@ class SlotReserver:
     async def get_free_slots(self) -> list[Slot]:
         today = datetime.today().strftime('%Y-%m-%d')
 
-        if today in self.available_dates_map:
-            date_range = self.available_dates_map[today]
-        else:
+        date_range = self.available_dates_map.get(today)
+
+        if not date_range:
+            logger.info(f"No date records found for '{today}'. Propagating new dates to map...")
             await self._propagate_available_dates()
-            date_range = self.available_dates_map[today]
+            date_range = self.available_dates_map.get(today)
 
         logger.info(f"Trying to get free slots with date range from {date_range[0]} to {date_range[-1]}")
         for date in date_range:
@@ -121,13 +126,14 @@ class SlotReserver:
         return []
 
     async def reserve_slot(self, slot: Slot) -> SlotReservation:
-        sleep_time = random.uniform(*DELAYS_BETWEEN_DAY_MONITORING_SECONDS)
+        sleep_time = random.uniform(*DELAY_BEFORE_RESERVATION_SECONDS)
         logger.info(f"Reserving first available slot... Sleep {sleep_time} seconds first...")
         await asyncio.sleep(sleep_time)
 
         reservation = await self._get_reservation(slot)
 
         if not reservation:
+            await self.notifier.notify_reservation_failed()
             raise ReservationException(f"Cannot reserve slot {slot.ch_date} {slot.ch_time}. Seems it's already taken.")
         else:
             logger.success(f"Reserved slot on {slot.ch_date} {slot.ch_time}!")

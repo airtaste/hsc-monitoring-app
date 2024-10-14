@@ -9,12 +9,12 @@ from typing import Optional
 import telegram.error
 from loguru import logger
 from telegram import Bot, Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, CallbackQueryHandler
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 from auth.authenticator import Authenticator
 from captcha.captcha_resolver import CaptchaResolver
 from config.configuration import TELEGRAM_BOT_TOKEN_ID, CHAT_ID, HSC_OFFICE_ID, APPROVE_RESERVATION_RETRY_THRESHOLD, \
-    REAUTH_THRESHOLD_HOURS, DELAYS_BETWEEN_SEARCH_ATTEMPT_SECONDS
+    REAUTH_THRESHOLD_HOURS, DELAYS_BETWEEN_SEARCH_ATTEMPT_SECONDS, ALLOW_LIST
 from exceptions.exceptions import ReservationApprovalException, ReservationException
 from monitoring.slot_reserver import SlotReserver
 from notification.notifier import Notifier
@@ -31,8 +31,9 @@ async def search_stop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     logger.info(f"Received '/search_stop' command from '{update.message.from_user.full_name}' with chat id '{update.message.chat_id}'")
 
     try:
-        if not update.message.chat_id == CHAT_ID:
+        if update.message.chat_id not in ALLOW_LIST:
             await update.message.reply_text(f'⛔ У вас немає прав на запуск поточної команди. Зверніться за допомогою до адміна бота.')
+            logger.warning(f"'Someone '{update.message.from_user.full_name}' is trying to interact with bot without permissions")
             return None
 
         if search_task:
@@ -51,7 +52,7 @@ async def search_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     logger.info(f"Received '/search_start' command from '{update.message.from_user.full_name}' with chat id '{update.message.chat_id}'")
 
     try:
-        if not update.message.chat_id == CHAT_ID:
+        if update.message.chat_id not in ALLOW_LIST:
             await update.message.reply_text(f'⛔ У вас немає прав на запуск поточної команди. Зверніться за допомогою до адміна бота.')
             return None
 
