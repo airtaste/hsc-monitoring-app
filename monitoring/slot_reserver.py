@@ -14,7 +14,7 @@ from selenium.webdriver.support.wait import WebDriverWait
 
 from captcha.captcha_resolver import CaptchaResolver
 from config.configuration import DELAYS_BETWEEN_DAY_MONITORING_SECONDS, BROWSER_DOWNLOADS_FOLDER, USER_EMAIL, \
-    DELAY_BEFORE_RESERVATION_SECONDS
+    DELAY_BEFORE_RESERVATION_SECONDS, START_FROM_DATE
 from exceptions.exceptions import ReservationException, ReservationApprovalException
 from model.models import Slot, SlotReservation
 from notification.notifier import Notifier
@@ -68,8 +68,13 @@ class SlotReserver:
         """
 
         available_dates_json = self.driver.execute_script(get_available_dates_script)
+        available_dates = json.loads(available_dates_json)
+
+        if START_FROM_DATE:
+            available_dates = [date for date in available_dates if date >= START_FROM_DATE]
+
         today = datetime.today().strftime('%Y-%m-%d')
-        self.available_dates_map[today] = json.loads(available_dates_json)
+        self.available_dates_map[today] = available_dates
 
         go_to_base_url_back_script = """
             location.href = 'https://eq.hsc.gov.ua/site/step0'
@@ -101,20 +106,31 @@ class SlotReserver:
                     xhr.setRequestHeader('Cache-Control', 'no-cache');
                     xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
                     xhr.send('office_id={self.office_id}&date_of_admission={date}&question_id=55&es_date=&es_time=');
-                    return xhr.responseText;
+                    return JSON.stringify({{
+                        "content": xhr.responseText,
+                        "status": xhr.status
+                    }});
                 """
 
-                response = self.driver.execute_script(get_slots_script)
-                response_json = json.loads(response)
+                response_json = await self.execute_search_script(get_slots_script)
 
-                free_slots = response_json['rows']
+                # Process redirect request if captcha found
+                if response_json['status'] == 302:
+                    logger.warning(f"Captcha required by platform! Processing...")
 
-                logger.info(f"Available slots on date {date}: {free_slots}")
+                    self.driver.refresh()
+
+                    if await self.captcha_resolver.has_captcha():
+                        await self.captcha_resolver.resolve_captcha_code()
+
+                    response_json = await self.execute_search_script(get_slots_script)
+
+                response_content = json.loads(response_json['content'])
+                free_slots = response_content['rows']
 
                 if free_slots:
                     logger.success(f"Found free slots on date {date}! Processing...")
-                    return [Slot(slot_id=item['id'], date=date, ch_time=item['chtime']) for item in
-                            response_json['rows']]
+                    return [Slot(slot_id=item['id'], date=date, ch_time=item['chtime']) for item in free_slots]
 
                 sleep_time = random.uniform(*DELAYS_BETWEEN_DAY_MONITORING_SECONDS)
                 logger.info(f"Sleep for {sleep_time:.1f} seconds after requesting free slots for {date} date...")
@@ -216,3 +232,8 @@ class SlotReserver:
         finally:
             if os.path.exists(file_path):
                 os.remove(file_path)
+
+    async def execute_search_script(self, get_slots_script):
+        response = self.driver.execute_script(get_slots_script)
+        logger.info(f"Server respond with data: {response}")
+        return json.loads(response)

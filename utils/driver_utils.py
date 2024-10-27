@@ -45,7 +45,9 @@ async def take_screenshot(driver: Chrome) -> bool:
     return driver.save_screenshot(screenshot_file_path)
 
 
-async def cleanup_browser_cache(driver: Chrome):
+async def cleanup_browser(driver: Chrome):
+    driver.delete_all_cookies()
+    driver.get('data:,')
     # Cleanup browser cache
     driver.execute_script("window.open('');")
     await asyncio.sleep(2)

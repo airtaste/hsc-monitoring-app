@@ -18,7 +18,7 @@ from config.configuration import TELEGRAM_BOT_TOKEN_ID, CHAT_ID, HSC_OFFICE_ID, 
 from exceptions.exceptions import ReservationApprovalException, ReservationException
 from monitoring.slot_reserver import SlotReserver
 from notification.notifier import Notifier
-from utils.driver_utils import cleanup_browser_cache, setup_chrome_driver
+from utils.driver_utils import cleanup_browser, setup_chrome_driver
 
 
 # Control variable to manage the running state of the search
@@ -118,13 +118,9 @@ async def search_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         except Exception as e:
             await notifier.notify_error(e)
             logger.error(e)
-            if search_task:
-                search_task.cancel()
-                search_task = None
         finally:
-            driver.delete_all_cookies()
-            driver.get('data:,')
-            await cleanup_browser_cache(driver)
+            search_task = None
+            await cleanup_browser(driver)
 
     search_task = asyncio.create_task(run_search())
 
